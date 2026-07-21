@@ -1745,3 +1745,68 @@ button { cursor: pointer; font-family: inherit; }
   letter-spacing: var(--h1-ls);
   margin: 0;
 }
+
+/* ════════════════ MOBILE RESPONSIVENESS AND DRAWERS ════════════════ */
+.sidebar-toggle {
+  display: none;
+  background: var(--surf);
+  border: 1px solid var(--border);
+  color: var(--text);
+  padding: 8px;
+  border-radius: 6px;
+  cursor: pointer;
+  align-items: center;
+  justify-content: center;
+}
+.sidebar-toggle:hover {
+  background: var(--surf2);
+}
+
+@media (max-width: 1080px) {
+  .sidebar-toggle {
+    display: inline-flex;
+  }
+  .sidebar {
+    position: fixed !important;
+    top: 0;
+    left: -280px;
+    width: 280px;
+    height: 100vh;
+    z-index: 9999;
+    box-shadow: 4px 0 24px rgba(0, 0, 0, 0.4);
+    transition: left 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  .sidebar.active {
+    left: 0 !important;
+  }
+  .main {
+    padding: 16px !important;
+  }
+}
+
+/* Responsive Table Wrapper */
+.table-responsive {
+  width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  margin-bottom: var(--gap);
+}
+.table-responsive table {
+  white-space: nowrap;
+}
+
+@media (max-width: 480px) {
+  :root {
+    --gap: 12px;
+  }
+  .card {
+    padding: 14px !important;
+  }
+  .state-title {
+    font-size: 18px !important;
+  }
+  canvas {
+    max-height: 240px !important;
+  }
+}
+

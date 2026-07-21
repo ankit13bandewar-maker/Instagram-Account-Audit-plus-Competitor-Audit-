@@ -103,6 +103,22 @@ function init() {
   if (searchForm) {
     searchForm.addEventListener('submit', handleSearchSubmit);
   }
+
+  // Mobile sidebar toggle handler
+  const toggleBtn = document.getElementById('sidebar-toggle');
+  const sidebar = document.querySelector('.sidebar');
+  if (toggleBtn && sidebar) {
+    toggleBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      sidebar.classList.toggle('active');
+    });
+    // Close sidebar when clicking outside on mobile
+    document.addEventListener('click', (e) => {
+      if (sidebar.classList.contains('active') && !sidebar.contains(e.target) && e.target !== toggleBtn) {
+        sidebar.classList.remove('active');
+      }
+    });
+  }
 }
 
 // ─── API HISTORY LIST FETCHER ───
