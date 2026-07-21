@@ -40,21 +40,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-@app.get("/")
-def root():
-    """Root endpoint - API is live and ready."""
-    return {
-        "status": "ok",
-        "message": "Instagram Account Audit API is running",
-        "version": "1.0.0",
-        "endpoints": {
-            "health": "/health",
-            "dashboard_intelligence": "/api/dashboard-intelligence?profile_url=https://www.instagram.com/nasa",
-            "hashtag_intelligence": "/api/hashtag-intelligence?profile_url=https://www.instagram.com/nasa",
-            "dynamic_hashtag_analytics": "/api/dynamic-hashtag-analytics?profile_url=https://www.instagram.com/nasa"
-        }
-    }
-
 @app.get("/health")
 def health_check():
     return {"status": "ok"}
@@ -1583,5 +1568,19 @@ async def get_dynamic_hashtag_analytics(
         "kill_list": kill_list,
         "try_these": try_these
     }
+
+
+# ── Serve static frontend files (HTML, CSS, JS) at the root level ──
+# Mounted at the very bottom of the file so explicit API routes defined above take precedence.
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
+
+@app.get("/")
+def serve_frontend_index():
+    frontend_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "new-ui-ux-frontend")
+    return FileResponse(os.path.join(frontend_dir, "index.html"))
+
+app.mount("/", StaticFiles(directory=os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "new-ui-ux-frontend")), name="frontend")
+
 
 
