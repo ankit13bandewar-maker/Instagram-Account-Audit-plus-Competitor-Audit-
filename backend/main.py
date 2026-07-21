@@ -1167,6 +1167,36 @@ def debug_apify():
     except Exception as e:
         return {"status": "ERROR", "token_prefix": masked, "reason": str(e)}
 
+@app.get("/api/test-scrape/{username}")
+def test_scrape(username: str):
+    """Diagnostic: runs a live scrape for a username and shows exactly what data source was used."""
+    import os
+    from apify_service import _scrape_via_apify, _scrape_via_instagram_api, _extract_username
+    profile_url = f"https://www.instagram.com/{username}"
+    result = {"username": username, "ig_api": None, "apify": None, "error": None}
+
+    # Test IG API
+    try:
+        ig_posts = _scrape_via_instagram_api(profile_url)
+        result["ig_api"] = {"count": len(ig_posts), "first_url": ig_posts[0].get("url","") if ig_posts else None}
+    except Exception as e:
+        result["ig_api"] = {"error": str(e)}
+
+    # Test Apify directly
+    try:
+        apify_posts = _scrape_via_apify(profile_url, None)
+        first = apify_posts[0] if apify_posts else {}
+        result["apify"] = {
+            "count": len(apify_posts),
+            "first_url": first.get("url",""),
+            "first_shortcode": first.get("shortcode",""),
+            "ownerFollowerCount": first.get("ownerFollowerCount", 0)
+        }
+    except Exception as e:
+        result["apify"] = {"error": str(e)}
+
+    return result
+
 @app.post("/api/clear-cache")
 def clear_cache():
     """Wipe the CSV post cache and history DB. Useful to force fresh Apify scrapes on the live server."""
