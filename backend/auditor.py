@@ -504,6 +504,10 @@ def run_batch_post_audits(posts, reels_median_likes, reels_median_comments, stat
         response_text = call_gemini_api(prompt, system_instruction=system_instruction, is_json=True)
         data = json.loads(response_text)
         
+        # Guard: if Gemini returned a non-dict (list, None, etc.), fall through to local fallback
+        if not isinstance(data, dict):
+            raise ValueError(f"Gemini returned unexpected type {type(data).__name__}, expected dict")
+        
         # Ensure all posts in the list have an entry in the returned dict
         result = {}
         for p in posts:

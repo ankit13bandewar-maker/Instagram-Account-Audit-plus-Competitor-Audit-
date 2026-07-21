@@ -1059,6 +1059,8 @@ def run_live_apify_competitor_audit(job_id: str, profile_url: str, date_from: st
         try:
             with open(HISTORY_DB_PATH, "r") as f:
                 history_db = json.load(f)
+            if not isinstance(history_db, dict):
+                history_db = {}
         except:
             history_db = {}
             
@@ -1066,7 +1068,11 @@ def run_live_apify_competitor_audit(job_id: str, profile_url: str, date_from: st
         import hashlib
         today_str = datetime.utcnow().strftime("%Y-%m-%d")
         existing_profile = history_db.get(handle, {})
+        if not isinstance(existing_profile, dict):
+            existing_profile = {}
         trend_history = existing_profile.get("trend_history", [])
+        if not isinstance(trend_history, list):
+            trend_history = []
         
         if len(trend_history) == 0:
             trend_history = []
