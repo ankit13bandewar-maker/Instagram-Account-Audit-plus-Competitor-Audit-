@@ -5,12 +5,13 @@
   ==============================================================
 -->
 
-<iframe sandbox="allow-scripts allow-same-origin allow-popups allow-popups-to-escape-sandbox allow-forms allow-top-navigation-by-user-activation" 
-    id="aura-audit-iframe" 
-    srcdoc="&lt;!DOCTYPE html&gt;
-&lt;html&gt;
+<iframe
+  sandbox="allow-scripts allow-same-origin allow-popups allow-popups-to-escape-sandbox allow-forms allow-top-navigation-by-user-activation"
+  id="aura-audit-iframe" srcdoc="&lt;!DOCTYPE html&gt;
+&lt;html lang=&quot;en&quot; data-palette=&quot;lime&quot;&gt;
 &lt;head&gt;
 &lt;meta charset=&quot;utf-8&quot;&gt;
+&lt;meta name=&quot;viewport&quot; content=&quot;width=device-width, initial-scale=1&quot; /&gt;
 &lt;style&gt;
 /* ============================================================
    AURA Audit — BloomX
@@ -2831,13 +2832,17 @@ function displayDashboard(rawData) {
       .sort((a, b) =&gt; b - a); // descending
 
     if (dates.length &gt; 1) {
-      // Ignore the 3 oldest posts in case they are pinned
-      const recentDates = dates.length &gt; 5 ? dates.slice(0, dates.length - 3) : dates;
-      const daysSpan = (recentDates[0] - recentDates[recentDates.length - 1]) / (1000 * 60 * 60 * 24);
+      // Calculate true calendar days spanned (stripping out time of day)
+      const oldestDate = new Date(dates[dates.length - 1]);
+      oldestDate.setHours(0, 0, 0, 0);
       
-      // Enforce a minimum span of 7 days to smooth out bulk-uploads (e.g. 9 posts in 1 day)
-      const smoothedDaysSpan = Math.max(daysSpan, 7);
-      velocityVal = recentDates.length / smoothedDaysSpan;
+      const newestDate = new Date(dates[0]);
+      newestDate.setHours(0, 0, 0, 0);
+      
+      const exactDaysDifference = Math.round((newestDate - oldestDate) / (1000 * 60 * 60 * 24));
+      const calendarDays = Math.max(exactDaysDifference + 1, 1);
+      
+      velocityVal = dates.length / calendarDays;
     }
   } else if (clientStats.days_per_post &amp;&amp; clientStats.days_per_post &gt; 0) {
     velocityVal = 1 / clientStats.days_per_post;
@@ -4141,9 +4146,7 @@ window.drawChart = function (id, pts, stroke, h, labels) {
     &#x27;&lt;stop offset=&quot;100%&quot; stop-color=&quot;&#x27; + stroke + &#x27;&quot; stop-opacity=&quot;0&quot;/&gt;&#x27; +
     &#x27;&lt;/linearGradient&gt;&lt;/defs&gt;&#x27; +
     gridLinesHtml +
-    &#x27;&lt;path d=&quot;&#x27; + area + &#x27;&quot; fill=&quot;url(#&#x27; + gid + &#x27;)&quot;/&gt;&#x27; +
-    &#x27;&lt;path d=&quot;&#x27; + d + &#x27;&quot; fill=&quot;none&quot; stroke=&quot;&#x27; + stroke + &#x27;&quot; stroke-width=&quot;2.4&quot; stroke-linecap=&quot;round&quot; stroke-linejoin=&quot;round&quot;/&gt;&#x27; +
-    circles +
+    graphElementsHtml +
     hoverSvg +
     &#x27;&lt;/svg&gt;&#x27;;
 
@@ -4251,18 +4254,17 @@ document.addEventListener(&quot;DOMContentLoaded&quot;, function() {
 &lt;/script&gt;
 &lt;/body&gt;
 &lt;/html&gt;
-" 
-    style="width: 100%; min-height: 800px; border: none; background: #0A0A0E; border-radius: 12px; overflow: hidden;" 
-    scrolling="no">
+" style="width: 100%; min-height: 800px; border: none; background: #0A0A0E; border-radius: 12px; overflow: hidden;"
+  scrolling="no">
 </iframe>
 
 <script>
-  window.addEventListener("message", function(e) {
-      if (e.data && e.data.type === "audit-resize") {
-          const iframe = document.getElementById("aura-audit-iframe");
-          if (iframe) {
-              iframe.style.height = e.data.height + "px";
-          }
+  window.addEventListener("message", function (e) {
+    if (e.data && e.data.type === "audit-resize") {
+      const iframe = document.getElementById("aura-audit-iframe");
+      if (iframe) {
+        iframe.style.height = e.data.height + "px";
       }
+    }
   });
 </script>
