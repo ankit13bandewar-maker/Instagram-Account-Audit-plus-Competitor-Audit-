@@ -174,18 +174,19 @@ def _scrape_via_apify(profile_url: str, date_from: str = None) -> list:
 
     return posts[:MAX_POSTS]
 
-def bulk_scrape_via_apify(profile_urls: list, date_from: str = None) -> None:
+def bulk_scrape_via_apify(profile_urls: list, date_from: str = None) -> dict:
     """
     Run the official Apify Instagram Scraper actor for MULTIPLE URLs at once.
-    Saves the fetched posts into the CSV cache. Returns nothing.
+    Returns a dict: {username: [posts]} so callers can use the data directly.
+    Also saves results to CSV cache.
     """
     if not profile_urls:
-        return
+        return {}
         
     token = os.getenv("APIFY_API_TOKEN", "")
     if not token:
         print("[Apify Bulk] Missing APIFY_API_TOKEN in .env")
-        return
+        return {}
 
     print(f"[Apify Bulk] Starting live bulk scrape for {len(profile_urls)} profiles: {profile_urls}")
     client = ApifyClient(token)
@@ -193,7 +194,7 @@ def bulk_scrape_via_apify(profile_urls: list, date_from: str = None) -> None:
     run_input = {
         "directUrls":        profile_urls,
         "resultsType":       "posts",
-        "addParentData":     False,
+        "addParentData":     True,   # Required to get ownerFollowerCount
     }
     
     if date_from:
@@ -207,34 +208,20 @@ def bulk_scrape_via_apify(profile_urls: list, date_from: str = None) -> None:
         print(f"[Apify Bulk] Scrape complete. Got {len(items)} items.")
     except Exception as e:
         print(f"[Apify Bulk] Failed: {e}")
-        return
+        return {}
 
-    # Group posts by profile url
-    profile_posts_map = {url: [] for url in profile_urls}
+    # Group posts by username
+    username_posts_map = {_extract_username(url): [] for url in profile_urls}
+    profile_url_map = {_extract_username(url): url for url in profile_urls}
     
     for item in items:
         shortcode  = item.get("shortCode") or item.get("shortcode") or ""
         post_url   = item.get("url") or (f"https://www.instagram.com/p/{shortcode}/" if shortcode else "")
-        owner_username = item.get("ownerUsername") or ""
+        owner_username = (item.get("ownerUsername") or "").lower()
         
-        # Try to map the item to one of our requested profiles
-        matched_url = None
-        if owner_username:
-            for url in profile_urls:
-                if _extract_username(url) == owner_username.lower():
-                    matched_url = url
-                    break
-        
-        # Fallback mapping if ownerUsername is missing
-        if not matched_url:
-            for url in profile_urls:
-                if _extract_username(url) in post_url.lower():
-                    matched_url = url
-                    break
-                    
-        if not matched_url:
+        if not owner_username or owner_username not in username_posts_map:
             continue
-            
+        
         if not shortcode or "/p/" not in post_url and "/reel/" not in post_url and "/tv/" not in post_url:
             continue
 
@@ -255,29 +242,40 @@ def bulk_scrape_via_apify(profile_urls: list, date_from: str = None) -> None:
             "displayUrl":    item.get("displayUrl") or item.get("thumbnailUrl") or "",
             "videoPlayCount": int(item.get("videoPlayCount") or item.get("videoViewCount") or item.get("playCount") or item.get("viewCount") or item.get("playsCount") or item.get("viewsCount") or 0),
             "productType":   item.get("productType") or "",
-            "ownerFollowerCount": int(item.get("ownerFollowerCount", 0))
+            "ownerFollowerCount": int(
+                item.get("ownerFollowerCount") or
+                item.get("followersCount") or
+                item.get("owner", {}).get("followersCount") or
+                item.get("owner", {}).get("follower_count") or
+                0
+            )
         }
-        
-        profile_posts_map[matched_url].append(post_data)
+        username_posts_map[owner_username].append(post_data)
 
-    # Save to CSV for each profile
-    for p_url, p_posts in profile_posts_map.items():
-        if p_posts:
-            # Sort by recency
-            def _ts_key(p):
-                ts = p.get("timestamp", "")
-                try:
-                    from datetime import datetime, timezone
-                    clean = str(ts).replace("Z", "+00:00")
-                    return datetime.fromisoformat(clean)
-                except Exception:
-                    from datetime import datetime, timezone
-                    return datetime.min.replace(tzinfo=timezone.utc)
-            p_posts.sort(key=_ts_key, reverse=True)
-            _save_to_csv(p_url, p_posts[:MAX_POSTS])
-            print(f"[Apify Bulk] Saved {len(p_posts[:MAX_POSTS])} posts to cache for {p_url}")
+    # Sort by recency and save to CSV for each profile
+    def _ts_key(p):
+        ts = p.get("timestamp", "")
+        try:
+            from datetime import datetime, timezone
+            clean = str(ts).replace("Z", "+00:00")
+            return datetime.fromisoformat(clean)
+        except Exception:
+            from datetime import datetime, timezone
+            return datetime.min.replace(tzinfo=timezone.utc)
+
+    for uname, posts in username_posts_map.items():
+        if posts:
+            posts.sort(key=_ts_key, reverse=True)
+            posts = posts[:MAX_POSTS]
+            username_posts_map[uname] = posts
+            p_url = profile_url_map.get(uname, f"https://www.instagram.com/{uname}")
+            _save_to_csv(p_url, posts)
+            print(f"[Apify Bulk] Saved {len(posts)} posts for '{uname}'")
         else:
-            print(f"[Apify Bulk] Warning: No posts found for {p_url} in bulk run.")
+            print(f"[Apify Bulk] Warning: No posts found for '{uname}' in bulk run.")
+
+    return username_posts_map
+
 
 
 
