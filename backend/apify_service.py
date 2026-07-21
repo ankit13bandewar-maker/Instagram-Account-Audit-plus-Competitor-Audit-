@@ -833,9 +833,11 @@ def scrape_latest_15_posts(profile_url: str, date_from: str = None, date_to: str
         try:
             public_api_posts = _scrape_via_instagram_api(profile_url)
             print(f"[IG API] Got {len(public_api_posts)} non-pinned posts for '{username}'.")
-            if public_api_posts and len(public_api_posts) >= 15:
+            # NOTE: Do NOT early return even if IG API gets 15 posts.
+            # We must always run Apify to get ownerFollowerCount (real follower count).
+            # IG public API does NOT return follower count.
+            if public_api_posts:
                 _save_to_csv(profile_url, public_api_posts)
-                return public_api_posts[:MAX_POSTS]
         except FileNotFoundError as e:
             print(f"[Profile Not Found] '{username}' does not exist (404). Propagating error.")
             raise e
