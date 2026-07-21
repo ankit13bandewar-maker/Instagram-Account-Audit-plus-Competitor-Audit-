@@ -855,14 +855,7 @@ def run_live_apify_competitor_audit(job_id: str, profile_url: str, date_from: st
 
         import time
         attempted_handles = set()
-        
-        # --- BULK APIFY PRE-FETCH ---
-        bulk_urls = [f"https://www.instagram.com/{h}" for h in competitor_handles[:5]]
-        try:
-            bulk_scrape_via_apify(bulk_urls, date_from)
-        except Exception as e:
-            print(f"Bulk pre-fetch failed: {e}")
-        # -----------------------------
+        # NOTE: Bulk pre-fetch removed — was causing CSV cache to interfere with main profile Apify call.
         
         for idx, c_handle in enumerate(competitor_handles[:5]):
             attempted_handles.add(c_handle.lower())
@@ -1157,6 +1150,22 @@ def get_audit_status(job_id: str):
                 client_metrics["reach_distribution_data"] = fill_distribution_gaps(client_metrics["reach_distribution_data"], audit_year)
                 
     return job
+
+@app.get("/api/debug-apify")
+def debug_apify():
+    """Diagnostic: checks if Apify token is loaded and can connect."""
+    import os
+    token = os.getenv("APIFY_API_TOKEN", "")
+    if not token:
+        return {"status": "ERROR", "reason": "APIFY_API_TOKEN is not set in environment"}
+    masked = token[:6] + "..." + token[-4:]
+    try:
+        from apify_client import ApifyClient
+        client = ApifyClient(token)
+        user = client.user().get()
+        return {"status": "OK", "token_prefix": masked, "apify_user": user.get("username", "unknown")}
+    except Exception as e:
+        return {"status": "ERROR", "token_prefix": masked, "reason": str(e)}
 
 @app.post("/api/clear-cache")
 def clear_cache():
