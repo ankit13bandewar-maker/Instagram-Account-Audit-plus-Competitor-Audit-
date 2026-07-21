@@ -1354,6 +1354,8 @@ def get_hashtag_intelligence(
     # Standardize posts to simplify metric operations
     parsed_posts = []
     for post in raw_posts:
+        if post is None or not isinstance(post, dict):
+            continue
         likes = post.get("likesCount") if post.get("likesCount") is not None else post.get("likes", 0)
         comments = post.get("commentsCount") if post.get("commentsCount") is not None else post.get("comments", 0)
         caption = post.get("caption", "") or ""
@@ -1362,6 +1364,9 @@ def get_hashtag_intelligence(
             "comments": comments,
             "caption": caption
         })
+
+    if not parsed_posts:
+        raise HTTPException(status_code=404, detail="No valid posts could be parsed.")
 
     # Read into pandas DataFrame for clean vector analytics
     df = pd.DataFrame(parsed_posts)
@@ -1448,6 +1453,8 @@ async def get_dynamic_hashtag_analytics(
     # Ingest and structure metrics
     parsed_posts = []
     for post in raw_posts:
+        if post is None or not isinstance(post, dict):
+            continue
         likes = post.get("likesCount") if post.get("likesCount") is not None else post.get("likes", 0)
         comments = post.get("commentsCount") if post.get("commentsCount") is not None else post.get("comments", 0)
         caption = post.get("caption", "") or ""
@@ -1457,6 +1464,9 @@ async def get_dynamic_hashtag_analytics(
             "caption": caption,
             "engagement": likes + comments
         })
+
+    if not parsed_posts:
+        raise HTTPException(status_code=404, detail="No valid posts could be parsed.")
 
     # Read into vector DataFrame
     df = pd.DataFrame(parsed_posts)
