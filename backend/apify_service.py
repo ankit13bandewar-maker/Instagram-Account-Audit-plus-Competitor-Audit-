@@ -168,6 +168,112 @@ def _scrape_via_apify(profile_url: str, date_from: str = None) -> list:
 
     return posts[:MAX_POSTS]
 
+def bulk_scrape_via_apify(profile_urls: list, date_from: str = None) -> None:
+    """
+    Run the official Apify Instagram Scraper actor for MULTIPLE URLs at once.
+    Saves the fetched posts into the CSV cache. Returns nothing.
+    """
+    if not profile_urls:
+        return
+        
+    token = os.getenv("APIFY_API_TOKEN", "")
+    if not token:
+        print("[Apify Bulk] Missing APIFY_API_TOKEN in .env")
+        return
+
+    print(f"[Apify Bulk] Starting live bulk scrape for {len(profile_urls)} profiles: {profile_urls}")
+    client = ApifyClient(token)
+
+    run_input = {
+        "directUrls":        profile_urls,
+        "resultsType":       "posts",
+        "addParentData":     False,
+    }
+    
+    if date_from:
+        run_input["oldestPostDate"] = date_from
+    else:
+        run_input["resultsLimit"] = 20
+
+    try:
+        run = client.actor(ACTOR_ID).call(run_input=run_input)
+        items = list(client.dataset(run["defaultDatasetId"]).iterate_items())
+        print(f"[Apify Bulk] Scrape complete. Got {len(items)} items.")
+    except Exception as e:
+        print(f"[Apify Bulk] Failed: {e}")
+        return
+
+    # Group posts by profile url
+    profile_posts_map = {url: [] for url in profile_urls}
+    
+    for item in items:
+        shortcode  = item.get("shortCode") or item.get("shortcode") or ""
+        post_url   = item.get("url") or (f"https://www.instagram.com/p/{shortcode}/" if shortcode else "")
+        owner_username = item.get("ownerUsername") or ""
+        
+        # Try to map the item to one of our requested profiles
+        matched_url = None
+        if owner_username:
+            for url in profile_urls:
+                if _extract_username(url) == owner_username.lower():
+                    matched_url = url
+                    break
+        
+        # Fallback mapping if ownerUsername is missing
+        if not matched_url:
+            for url in profile_urls:
+                if _extract_username(url) in post_url.lower():
+                    matched_url = url
+                    break
+                    
+        if not matched_url:
+            continue
+            
+        if not shortcode or "/p/" not in post_url and "/reel/" not in post_url and "/tv/" not in post_url:
+            continue
+
+        if item.get("isPinned", False):
+            continue
+            
+        timestamp  = item.get("timestamp") or item.get("taken_at_timestamp") or datetime.utcnow().isoformat()
+        post_type  = item.get("type") or ("Video" if item.get("isVideo") else "Image")
+
+        post_data = {
+            "likesCount":    int(item.get("likesCount") or item.get("likes_count") or 0),
+            "commentsCount": int(item.get("commentsCount") or item.get("comments_count") or 0),
+            "timestamp":     str(timestamp),
+            "type":          post_type,
+            "caption":       str(item.get("caption") or ""),
+            "url":           post_url,
+            "shortcode":     shortcode,
+            "displayUrl":    item.get("displayUrl") or item.get("thumbnailUrl") or "",
+            "videoPlayCount": int(item.get("videoPlayCount") or item.get("videoViewCount") or item.get("playCount") or item.get("viewCount") or item.get("playsCount") or item.get("viewsCount") or 0),
+            "productType":   item.get("productType") or "",
+            "ownerFollowerCount": int(item.get("ownerFollowerCount", 0))
+        }
+        
+        profile_posts_map[matched_url].append(post_data)
+
+    # Save to CSV for each profile
+    for p_url, p_posts in profile_posts_map.items():
+        if p_posts:
+            # Sort by recency
+            def _ts_key(p):
+                ts = p.get("timestamp", "")
+                try:
+                    from datetime import datetime, timezone
+                    clean = str(ts).replace("Z", "+00:00")
+                    return datetime.fromisoformat(clean)
+                except Exception:
+                    from datetime import datetime, timezone
+                    return datetime.min.replace(tzinfo=timezone.utc)
+            p_posts.sort(key=_ts_key, reverse=True)
+            _save_to_csv(p_url, p_posts[:MAX_POSTS])
+            print(f"[Apify Bulk] Saved {len(p_posts[:MAX_POSTS])} posts to cache for {p_url}")
+        else:
+            print(f"[Apify Bulk] Warning: No posts found for {p_url} in bulk run.")
+
+
 
 def get_real_follower_count(handle: str, fallback_calc: int) -> int:
     import requests, re, time
@@ -462,9 +568,11 @@ def _generate_highly_authentic_posts(profile_url: str) -> list:
             "timestamp": timestamp,
             "type": post_type,
             "caption": caption,
-            "url": f"https://www.instagram.com/p/{shortcode}/",
-            "shortcode": shortcode,
-            "displayUrl": f"https://picsum.photos/100/100?random={i}",
+            # Permanent fix: mock posts link to the profile page instead of a fake shortcode URL
+            # that would 404 on Instagram. The shortcode is kept empty to signal "no real post".
+            "url": f"https://www.instagram.com/{username}/",
+            "shortcode": "",
+            "displayUrl": "",
             "videoPlayCount": video_play_count,
             "productType": product_type,
             "is_mock": True,
@@ -734,14 +842,24 @@ def scrape_latest_15_posts(profile_url: str, date_from: str = None, date_to: str
         except Exception as e:
             print(f"[IG API Failed] for '{username}': {e}. Trying Apify...")
 
-    # ── Step 2: Apify scrape — always run when IG API returned < 15 ──
+    # ── Step 1.5: CSV Cache check for pre-fetched bulk data ──
     apify_posts = None
     try:
-        print(f"[Apify] Fetching posts for '{username}' (IG API had {len(public_api_posts) if public_api_posts else 0} posts)...")
-        apify_posts = _scrape_via_apify(profile_url, date_from)
-        print(f"[Apify] Got {len(apify_posts)} non-pinned posts for '{username}'.")
+        cached_posts = _load_csv_for_profile(username)
+        if cached_posts and len(cached_posts) >= (15 if not (date_from or date_to) else 1):
+            print(f"[CSV Cache] Found {len(cached_posts)} pre-fetched posts for '{username}', skipping single Apify scrape.")
+            apify_posts = cached_posts
     except Exception as e:
-        print(f"[Apify Failed] for '{username}': {e}.")
+        pass
+
+    # ── Step 2: Apify scrape — always run when IG API returned < 15 and not in cache ──
+    if not apify_posts:
+        try:
+            print(f"[Apify] Fetching posts for '{username}' (IG API had {len(public_api_posts) if public_api_posts else 0} posts)...")
+            apify_posts = _scrape_via_apify(profile_url, date_from)
+            print(f"[Apify] Got {len(apify_posts)} non-pinned posts for '{username}'.")
+        except Exception as e:
+            print(f"[Apify Failed] for '{username}': {e}.")
 
     # ── Step 3: Merge IG API + Apify, dedup by shortcode, sort by recency ──
     if public_api_posts or apify_posts:
@@ -807,15 +925,16 @@ def scrape_latest_15_posts(profile_url: str, date_from: str = None, date_to: str
 
         # ── Step 3.6: Fallback to Mock Data to guarantee 15 posts ──
         if len(result) < MAX_POSTS and not (date_from or date_to):
-            print(f"[Fallback] Padding result with generated posts to reach {MAX_POSTS}.")
-            generated = _generate_highly_authentic_posts(profile_url)
-            for p in generated:
-                if len(result) >= MAX_POSTS:
-                    break
-                sc = p.get("shortcode", "")
-                if sc and sc not in seen_shortcodes:
-                    seen_shortcodes.add(sc)
-                    result.append(p)
+            pass
+            # print(f"[Fallback] Padding result with generated posts to reach {MAX_POSTS}.")
+            # generated = _generate_highly_authentic_posts(profile_url)
+            # for p in generated:
+            #     if len(result) >= MAX_POSTS:
+            #         break
+            #     sc = p.get("shortcode", "")
+            #     if sc and sc not in seen_shortcodes:
+            #         seen_shortcodes.add(sc)
+            #         result.append(p)
 
         _save_to_csv(profile_url, result)
         return result
@@ -827,20 +946,23 @@ def scrape_latest_15_posts(profile_url: str, date_from: str = None, date_to: str
         if posts:
             print(f"[CSV Cache] Using {len(posts)} cached posts for '{username}'.")
             if len(posts) < MAX_POSTS:
-                print(f"[Fallback] Padding CSV cached posts to reach {MAX_POSTS}.")
-                seen_shortcodes = {p.get("shortcode", "") for p in posts}
-                generated = _generate_highly_authentic_posts(profile_url)
-                for p in generated:
-                    if len(posts) >= MAX_POSTS:
-                        break
-                    sc = p.get("shortcode", "")
-                    if sc and sc not in seen_shortcodes:
-                        seen_shortcodes.add(sc)
-                        posts.append(p)
+                pass
+                # print(f"[Fallback] Padding CSV cached posts to reach {MAX_POSTS}.")
+                # seen_shortcodes = {p.get("shortcode", "") for p in posts}
+                # generated = _generate_highly_authentic_posts(profile_url)
+                # for p in generated:
+                #     if len(posts) >= MAX_POSTS:
+                #         break
+                #     sc = p.get("shortcode", "")
+                #     if sc and sc not in seen_shortcodes:
+                #         seen_shortcodes.add(sc)
+                #         posts.append(p)
             return posts
     except Exception as e:
         print(f"[CSV Fallback Failed] for '{username}': {e}.")
 
     # ── Step 5: Final Deterministic Fallback ──
-    print("[Final Fallback] Returning 15 fully generated posts.")
-    return _generate_highly_authentic_posts(profile_url)[:MAX_POSTS]
+    print("[Final Fallback] No real posts found. Returning empty instead of mock data.")
+    return []
+    # print("[Final Fallback] Returning 15 fully generated posts.")
+    # return _generate_highly_authentic_posts(profile_url)[:MAX_POSTS]
