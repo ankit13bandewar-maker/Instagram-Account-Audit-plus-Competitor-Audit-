@@ -832,23 +832,11 @@ def scrape_latest_15_posts(profile_url: str, date_from: str = None, date_to: str
     public_api_posts = None
 
     # ── Step 1: Instagram public API scrape ──
-    if date_from:
-        # Skip IG API if fetching a specific historical date range
-        print(f"[IG API] Skipping public API because a date range ({date_from}) is active.")
-    else:
-        try:
-            public_api_posts = _scrape_via_instagram_api(profile_url)
-            print(f"[IG API] Got {len(public_api_posts)} non-pinned posts for '{username}'.")
-            # NOTE: Do NOT early return even if IG API gets 15 posts.
-            # We must always run Apify to get ownerFollowerCount (real follower count).
-            # IG public API does NOT return follower count.
-            if public_api_posts:
-                _save_to_csv(profile_url, public_api_posts)
-        except FileNotFoundError as e:
-            print(f"[Profile Not Found] '{username}' does not exist (404). Propagating error.")
-            raise e
-        except Exception as e:
-            print(f"[IG API Failed] for '{username}': {e}. Trying Apify...")
+    # NOTE: Skipped entirely — Render's IP is rate-limited by Instagram (always returns 429).
+    # This caused 50+ second delays before Apify was ever reached.
+    # Apify provides complete data including ownerFollowerCount, so IG API is not needed.
+    print(f"[IG API] Skipping — going directly to Apify for reliable data.")
+
 
 
     # ── Step 2: Apify scrape — ALWAYS runs to guarantee real ownerFollowerCount ──
