@@ -115,7 +115,7 @@ def _scrape_via_apify(profile_url: str, date_from: str = None) -> list:
     run_input = {
         "directUrls":        [profile_url],
         "resultsType":       "posts",
-        "addParentData":     False,
+        "addParentData":     True,   # Required to get ownerFollowerCount in post items
     }
     
     if date_from:
@@ -157,7 +157,13 @@ def _scrape_via_apify(profile_url: str, date_from: str = None) -> list:
             "displayUrl":    item.get("displayUrl") or item.get("thumbnailUrl") or "",
             "videoPlayCount": int(item.get("videoPlayCount") or item.get("videoViewCount") or item.get("playCount") or item.get("viewCount") or item.get("playsCount") or item.get("viewsCount") or 0),
             "productType":   item.get("productType") or "",
-            "ownerFollowerCount": int(item.get("ownerFollowerCount", 0))
+            "ownerFollowerCount": int(
+                item.get("ownerFollowerCount") or
+                item.get("followersCount") or
+                item.get("owner", {}).get("followersCount") or
+                item.get("owner", {}).get("follower_count") or
+                0
+            )
         })
 
     if pinned_count > 0:

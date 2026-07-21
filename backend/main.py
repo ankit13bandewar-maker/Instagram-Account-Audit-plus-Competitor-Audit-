@@ -458,11 +458,18 @@ def run_live_apify_competitor_audit(job_id: str, profile_url: str, date_from: st
         multiplier = 12 + (handle_hash % 34)
         calculated_fallback = int(average_likes * multiplier) if average_likes > 0 else 5000000
         
-        # Avoid redundant API call if we already extracted exact follower count during scraping
-        if raw_posts and raw_posts[0].get("ownerFollowerCount"):
-            client_follower_count = raw_posts[0].get("ownerFollowerCount")
+        # Extract real follower count from any post that has it (Apify posts carry ownerFollowerCount)
+        # IG API posts are first in the merged list but have ownerFollowerCount=0, so we search all
+        extracted_follower_count = next(
+            (int(p.get("ownerFollowerCount")) for p in raw_posts if p.get("ownerFollowerCount") and int(p.get("ownerFollowerCount")) > 0),
+            0
+        )
+        if extracted_follower_count > 0:
+            client_follower_count = extracted_follower_count
+            print(f"[Follower Count] Using real count from Apify: {client_follower_count:,}")
         else:
             client_follower_count = get_real_follower_count(handle, calculated_fallback)
+
         
         client_calc = calculate_metrics_package(parsed_posts, client_follower_count)
 
