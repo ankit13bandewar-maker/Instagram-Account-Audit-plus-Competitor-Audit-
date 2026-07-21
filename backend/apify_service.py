@@ -130,6 +130,9 @@ def _scrape_via_apify(profile_url: str, date_from: str = None) -> list:
     posts = []
     pinned_count = 0
     for item in items:
+        # Guard: Apify sometimes returns None items
+        if item is None or not isinstance(item, dict):
+            continue
         # Apify Instagram Scraper field names
         shortcode  = item.get("shortCode") or item.get("shortcode") or ""
         post_url   = item.get("url") or (f"https://www.instagram.com/p/{shortcode}/" if shortcode else "")
@@ -146,6 +149,11 @@ def _scrape_via_apify(profile_url: str, date_from: str = None) -> list:
         timestamp  = item.get("timestamp") or item.get("taken_at_timestamp") or datetime.utcnow().isoformat()
         post_type  = item.get("type") or ("Video" if item.get("isVideo") else "Image")
 
+        # Guard: owner field can be null from Apify even if key exists
+        owner_obj = item.get("owner") or {}
+        if not isinstance(owner_obj, dict):
+            owner_obj = {}
+
         posts.append({
             "likesCount":    int(item.get("likesCount") or item.get("likes_count") or 0),
             "commentsCount": int(item.get("commentsCount") or item.get("comments_count") or 0),
@@ -160,8 +168,8 @@ def _scrape_via_apify(profile_url: str, date_from: str = None) -> list:
             "ownerFollowerCount": int(
                 item.get("ownerFollowerCount") or
                 item.get("followersCount") or
-                item.get("owner", {}).get("followersCount") or
-                item.get("owner", {}).get("follower_count") or
+                owner_obj.get("followersCount") or
+                owner_obj.get("follower_count") or
                 0
             )
         })
@@ -215,6 +223,9 @@ def bulk_scrape_via_apify(profile_urls: list, date_from: str = None) -> dict:
     profile_url_map = {_extract_username(url): url for url in profile_urls}
     
     for item in items:
+        # Guard: Apify sometimes returns None items for failed/incomplete dataset rows
+        if item is None or not isinstance(item, dict):
+            continue
         shortcode  = item.get("shortCode") or item.get("shortcode") or ""
         post_url   = item.get("url") or (f"https://www.instagram.com/p/{shortcode}/" if shortcode else "")
         owner_username = (item.get("ownerUsername") or "").lower()
@@ -231,6 +242,11 @@ def bulk_scrape_via_apify(profile_urls: list, date_from: str = None) -> dict:
         timestamp  = item.get("timestamp") or item.get("taken_at_timestamp") or datetime.utcnow().isoformat()
         post_type  = item.get("type") or ("Video" if item.get("isVideo") else "Image")
 
+        # Guard: owner field can be null from Apify even if key exists
+        owner_obj = item.get("owner") or {}
+        if not isinstance(owner_obj, dict):
+            owner_obj = {}
+
         post_data = {
             "likesCount":    int(item.get("likesCount") or item.get("likes_count") or 0),
             "commentsCount": int(item.get("commentsCount") or item.get("comments_count") or 0),
@@ -245,8 +261,8 @@ def bulk_scrape_via_apify(profile_urls: list, date_from: str = None) -> dict:
             "ownerFollowerCount": int(
                 item.get("ownerFollowerCount") or
                 item.get("followersCount") or
-                item.get("owner", {}).get("followersCount") or
-                item.get("owner", {}).get("follower_count") or
+                owner_obj.get("followersCount") or
+                owner_obj.get("follower_count") or
                 0
             )
         }
