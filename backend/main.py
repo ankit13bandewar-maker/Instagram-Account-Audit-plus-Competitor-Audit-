@@ -1114,8 +1114,11 @@ def run_live_apify_competitor_audit(job_id: str, profile_url: str, date_from: st
         audit_jobs[job_id] = {"status": "completed", "data": response_payload}
         
     except Exception as e:
+        import traceback
+        full_tb = traceback.format_exc()
         print(f"Background task error: {e}")
-        audit_jobs[job_id] = {"status": "error", "error": str(e)}
+        print(f"FULL TRACEBACK:\n{full_tb}")
+        audit_jobs[job_id] = {"status": "error", "error": f"{str(e)} | TRACE: {full_tb[-500:]}"}
 
 @app.get("/api/dashboard-audit")
 def get_dashboard_intelligence(
