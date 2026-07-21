@@ -208,15 +208,291 @@ def get_real_follower_count(handle: str, fallback_calc: int) -> int:
     return fallback_calc
 
 
+def get_dynamic_competitors(target_handle: str) -> list:
+    import requests
+    import os
+    import time as _time
+    import json
+    import re as _re
+
+    base_dir = os.path.dirname(os.path.abspath(__file__))
+    th_lower = target_handle.lower()
+
+    # ── Mutual-pin rules for the two main astro accounts ──────────────
+    IS_ARUN_PANDIT   = (th_lower == "astroarunpandit")
+    IS_ADITYA_KUNDLI = (th_lower == "adityakundli")
+
+    # ── Astro niche keyword detector ──────────────────────────────────
+    ASTRO_KEYWORDS = ["astro", "zodiac", "pandit", "acharya", "baba",
+                      "guru", "vedic", "kundli", "tarot", "jyotish"]
+    IS_ASTRO_NICHE = any(k in th_lower for k in ASTRO_KEYWORDS)
+
+    # ── Guaranteed hand-picked astrology accounts (always in the pool) ─
+    ASTRO_CORE = [
+        "astro_parduman",             # instagram.com/astro_parduman/
+        "askin_astrology",            # instagram.com/askin_astrology/
+        "astrologerdivapratihast",    # instagram.com/astrologerdivapratihast/
+        "arun_kumar_vyas_astrologer", # instagram.com/arun_kumar_vyas_astrologer/
+        "dr.jai_madan",
+        "sundeep.kochar",
+        "astrologer_shri_shivaya"
+    ]
+
+    def _apply_astro_rule(final_list: list) -> list:
+        """Pin the correct #1 astro competitor based on who is being audited."""
+        if not IS_ASTRO_NICHE:
+            return final_list
+        if IS_ARUN_PANDIT:
+            for h in ["astroarunpandit", "adityakundli"]:
+                if h in final_list: final_list.remove(h)
+            final_list.insert(0, "adityakundli")
+        elif IS_ADITYA_KUNDLI:
+            for h in ["adityakundli", "astroarunpandit"]:
+                if h in final_list: final_list.remove(h)
+            final_list.insert(0, "astroarunpandit")
+        else:
+            if "astroarunpandit" in final_list: final_list.remove("astroarunpandit")
+            final_list.insert(0, "astroarunpandit")
+        return final_list
+
+    # ── Brand/platform blocklist ──────────────────────────────────────
+    BRAND_BLOCKLIST = {
+        "astrotalk", "astoyogi", "anytimeastro", "astrologyzone",
+        "ganeshaspeaks", "astrosage", "clickastro", "premastrologer",
+        "astromall", "futurepoint_india", "buzzfeedtasty", "foodnetwork",
+        "natgeotravel", "travelandleisure", "designboom", "creativeboom",
+        "businessinsider", "wallstreetjournal", "techcrunch", "engadget",
+        "wired", "forbes", "entrepreneur", "gymshark", "crossfit",
+    }
+
+    def _is_individual(handle: str) -> bool:
+        h = handle.lower()
+        if h in BRAND_BLOCKLIST: return False
+        for sfx in ["talk", "yogi", "zone", "sage", "mall", "point",
+                    "network", "media", "buzzfeed", "news"]:
+            if h.endswith(sfx) and len(h) > len(sfx) + 3: return False
+        return True
+
+    def _clean_list(handles: list) -> list:
+        seen, out = set(), []
+        for h in handles:
+            h = h.lower().strip()
+            if h and h != th_lower and h not in seen and _is_individual(h):
+                seen.add(h); out.append(h)
+        return out
+
+    def _finalize(dynamic_handles: list) -> list:
+        dynamic_clean = _clean_list(dynamic_handles)
+        if IS_ASTRO_NICHE:
+            merged = _clean_list(ASTRO_CORE)
+            return _apply_astro_rule(merged)
+        else:
+            return dynamic_clean
+
+    _CACHE_PATH = os.path.join(base_dir, "competitor_cache.json")
+    _CACHE_TTL  = 86400  # 24 hours
+
+    def _cache_get(handle: str):
+        try:
+            if os.path.exists(_CACHE_PATH):
+                with open(_CACHE_PATH, "r", encoding="utf-8") as f:
+                    cache = json.load(f)
+                entry = cache.get(handle)
+                if entry and (_time.time() - entry.get("ts", 0)) < _CACHE_TTL:
+                    print(f"DEBUG: Cache hit for '{handle}' — {len(entry['handles'])} handles")
+                    return entry["handles"]
+        except Exception as ce:
+            print(f"DEBUG: Cache read error ({ce})")
+        return None
+
+    def _cache_set(handle: str, handles: list):
+        try:
+            cache = {}
+            if os.path.exists(_CACHE_PATH):
+                with open(_CACHE_PATH, "r", encoding="utf-8") as f:
+                    cache = json.load(f)
+            cache[handle] = {"ts": _time.time(), "handles": handles}
+            with open(_CACHE_PATH, "w", encoding="utf-8") as f:
+                json.dump(cache, f)
+            print(f"DEBUG: Cached {len(handles)} handles for '{handle}'")
+        except Exception as ce:
+            print(f"DEBUG: Cache write error ({ce})")
+
+    # 1. CHECK LLM CACHE FIRST
+    cached = _cache_get(th_lower)
+    if cached and len(cached) >= 2:
+        return _finalize(cached)
+
+    # 2. METHOD 1 — Discover Chaining / related profiles
+    common_headers = {
+        'x-ig-app-id': '936619743392459',
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Accept-Language': 'en-US,en;q=0.9',
+        'Accept': '*/*',
+        'Referer': f'https://www.instagram.com/{target_handle}/',
+    }
+    user_id = None
+    try:
+        r_profile = requests.get(
+            f"https://www.instagram.com/api/v1/users/web_profile_info/?username={target_handle}",
+            headers=common_headers, timeout=10
+        )
+        if r_profile.status_code == 200:
+            user = r_profile.json().get('data', {}).get('user', {})
+            user_id = user.get('id')
+            related = [e.get('node', {}).get('username', '').lower()
+                       for e in user.get('edge_related_profiles', {}).get('edges', [])]
+            if len(_clean_list(related)) >= 3:
+                print(f"DEBUG: edge_related_profiles gave {len(related)} handles for {target_handle}")
+                return _finalize(related)
+    except Exception as e:
+        print(f"DEBUG: web_profile_info failed ({e})")
+
+    if user_id:
+        try:
+            _time.sleep(0.5)
+            r_chain = requests.get(
+                f"https://www.instagram.com/api/v1/discover/chaining/?target_id={user_id}",
+                headers=common_headers, timeout=10
+            )
+            if r_chain.status_code == 200:
+                chain = [u.get('username', '').lower() for u in r_chain.json().get('users', [])]
+                if len(_clean_list(chain)) >= 3:
+                    print(f"DEBUG: Chaining API gave {len(chain)} handles for {target_handle}")
+                    return _finalize(chain)
+                else:
+                    print(f"DEBUG: Chaining API returned too few individual accounts — falling back to LLM")
+        except Exception as e:
+            print(f"DEBUG: Chaining API failed ({e})")
+
+    # 3. METHOD 2 — LLM (Gemini / OpenRouter) with 24-hour cache
+    try:
+        gemini_key = os.getenv("GEMINI_API_KEY")
+        if not gemini_key: raise ValueError("No Gemini key")
+
+        prompt = (
+            f"Instagram handle: @{target_handle}\n\n"
+            "Task: Find 7 competitor/similar Instagram accounts in the same niche/domain.\n\n"
+            "STRICT RULES:\n"
+            "- If the target account is a business/brand/platform/media channel (e.g. news, sports network, corporate brand), find similar business/brand/platform accounts in the same niche.\n"
+            "- If the target is an individual creator/person, find similar individual creators/people.\n"
+            "- BANNED (do NOT return for astrology niche): astrotalk, astroyogi, anytimeastro, ganeshaspeaks, astrosage.\n"
+            "- Return real active accounts, same country/region as the target handle if possible.\n\n"
+            "Return ONLY: handle1,handle2,handle3,handle4,handle5,handle6,handle7\n"
+            "No @ symbols. No spaces. No explanation. Just the comma-separated list."
+        )
+
+        models = ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-1.5-flash-latest", "gemini-1.5-pro-latest"]
+        text, success = "", False
+        import time as _t
+        for model in models:
+            url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={gemini_key.strip()}"
+            for attempt in range(2):
+                resp = requests.post(url, json={"contents": [{"parts": [{"text": prompt}]}],
+                                                "generationConfig": {"temperature": 0.1}}, timeout=15)
+                if resp.status_code == 429:
+                    _t.sleep(attempt + 1); continue
+                if resp.ok:
+                    text = resp.json().get("candidates", [])[0].get("content", {}).get("parts", [])[0].get("text", "")
+                    success = True; break
+                break
+            if success: break
+
+        if not success:
+            or_key = os.getenv("OPENROUTER_API_KEY")
+            if or_key:
+                or_resp = requests.post(
+                    "https://openrouter.ai/api/v1/chat/completions",
+                    json={"model": "google/gemini-2.5-flash",
+                          "messages": [{"role": "user", "content": prompt}],
+                          "temperature": 0.1},
+                    headers={"Authorization": f"Bearer {or_key.strip()}"}, timeout=15
+                )
+                text = or_resp.json()["choices"][0]["message"]["content"]
+                success = True
+
+        if success and text:
+            cleaned_text = _re.sub(r'```[a-zA-Z]*\n', '', text).replace('```', '')
+            last_line = [l for l in cleaned_text.split('\n') if l.strip()][-1]
+            raw = [_re.sub(r'[^a-z0-9._]', '', h.strip().lower())
+                   for h in last_line.replace("@", "").split(",") if h.strip()]
+            llm_handles = _clean_list([h for h in raw if h])
+            if len(llm_handles) >= 3:
+                print(f"DEBUG: LLM gave {len(llm_handles)} handles for {target_handle} — caching")
+                _cache_set(th_lower, llm_handles)
+                return _finalize(llm_handles)
+
+    except Exception as e:
+        print(f"DEBUG: LLM failed ({e}) — falling through to static fallback")
+
+    # 4. METHOD 3 — Static fallback (last resort only)
+    th = th_lower
+
+    if IS_ARUN_PANDIT:
+        astro_pool = ["adityakundli"] + ASTRO_CORE
+    elif IS_ADITYA_KUNDLI:
+        astro_pool = ["astroarunpandit"] + ASTRO_CORE
+    else:
+        astro_pool = ["astroarunpandit", "adityakundli"] + ASTRO_CORE
+
+    sports_pool        = ["virat.kohli", "mahi7781", "rohitsharma45", "hardikpandya93", "neeraj____chopra", "smriti_mandhana"]
+    entertainment_pool = ["shraddhakapoor", "priyankachopra", "aliaabhatt", "deepikapadukone", "iamsrk", "katrinakaif"]
+    fashion_pool       = ["komalpandeyofficial", "thatbohogirl", "masabagupta", "aashnashroff", "siddharth93batra", "diipakhosla"]
+    travel_pool        = ["anunaysood", "bruisedpassports", "tanyakhanijow", "shenaztreasury", "larissa_wlc", "aakanksha.monga"]
+    art_pool           = ["madstuffwithrob", "aliciasouza", "thefilmyowl", "neha.doodles", "vimalchandran", "pranitart"]
+    finance_pool       = ["ankurwarikoo", "financewithsharan", "rachanaranade", "pranjalkamra", "fincocktail", "akshat.shrivastava"]
+    education_pool     = ["dhruvrathee", "physicswallah", "khansirgsofficial", "dr_vikas_divyakirti", "aman.dhattarwal", "shradhakhapra"]
+    tech_pool          = ["technicalguruji", "shlok_srivastava", "techbar", "trakin_tech", "beebomco", "ruhezamrel"]
+    fitness_pool       = ["sahilkhan", "ranveer.allahbadia", "guru_mann", "sangram_chougule_official", "sonali_swami", "yatindersingh_official"]
+    food_pool          = ["ranveer.brar", "sanjeevkapoor", "yourfoodlab", "kunalkapur", "kavitaskitchen", "hebbars.kitchen"]
+    general_pool       = ["bhuvan.bam22", "carryminati", "ashishchanchlani", "prajaktakoli", "kushakapila", "harshbeniwal"]
+
+    if IS_ASTRO_NICHE:
+        result = [c for c in astro_pool if c != th][:5]
+        return _apply_astro_rule(result)
+    elif any(k in th for k in ["cric","virat","kohli","dhoni","rohit","sachin","sport","game","play","football","soccer","tennis","athlete"]):
+        return [c for c in sports_pool if c != th][:5]
+    elif any(k in th for k in ["bolly","holly","actor","actress","cinema","movie","music","singer","star","celebrity","show","tv"]):
+        return [c for c in entertainment_pool if c != th][:5]
+    elif any(k in th for k in ["fashion","beauty","makeup","style","wear","look","glam","dress"]):
+        return [c for c in fashion_pool if c != th][:5]
+    elif any(k in th for k in ["travel","tour","explore","wild","cam","lens","wander"]):
+        return [c for c in travel_pool if c != th][:5]
+    elif any(k in th for k in ["art","draw","paint","sketch","illustr","creativ"]):
+        return [c for c in art_pool if c != th][:5]
+    elif any(k in th for k in ["biz","money","market","finance","invest","wealth","trade"]):
+        return [c for c in finance_pool if c != th][:5]
+    elif any(k in th for k in ["edu","learn","science","fact","know","study","teach","math","physic"]):
+        return [c for c in education_pool if c != th][:5]
+    elif any(k in th for k in ["tech","code","dev","program","software"]):
+        return [c for c in tech_pool if c != th][:5]
+    elif any(k in th for k in ["fit","gym","workout","muscle","training","yoga"]):
+        return [c for c in fitness_pool if c != th][:5]
+    elif any(k in th for k in ["food","chef","eat","cook","recipe","kitchen"]):
+        return [c for c in food_pool if c != th][:5]
+    else:
+        return [c for c in general_pool if c != th][:5]
+
 def run_live_apify_competitor_audit(job_id: str, profile_url: str, date_from: str = None, date_to: str = None):
     try:
         # Extract clean handle
         handle = profile_url.strip().rstrip("/").split("/")[-1].split("?")[0].lower()
-        
-        raw_posts = scrape_latest_15_posts(profile_url, date_from, date_to)
+
+        # ── STEP 0: Determine competitor handles FIRST so we can bulk-fetch everything in ONE Apify call ──
+        competitor_handles = get_dynamic_competitors(handle)
+
+        # ── STEP 1: ONE bulk Apify call for main profile + all competitors ──
+        all_urls = [profile_url] + [f"https://www.instagram.com/{h}" for h in competitor_handles[:5]]
+        print(f"[Bulk Audit] Fetching {len(all_urls)} profiles in ONE Apify call: {all_urls}")
+        bulk_results = bulk_scrape_via_apify(all_urls, date_from)
+        print(f"[Bulk Audit] Bulk fetch complete. Got data for: {list(bulk_results.keys())}")
+
+        # ── STEP 2: Extract main profile posts from bulk results ──
+        raw_posts = bulk_results.get(handle, [])
         if not raw_posts:
-            audit_jobs[job_id] = {"status": "error", "error": "No posts returned for the target profile."}
+            audit_jobs[job_id] = {"status": "error", "error": f"No posts returned for @{handle}. Profile may be private."}
             return
+
 
         parsed_posts = []
         for idx, post in enumerate(raw_posts, 1):
@@ -473,291 +749,6 @@ def run_live_apify_competitor_audit(job_id: str, profile_url: str, date_from: st
         
         client_calc = calculate_metrics_package(parsed_posts, client_follower_count)
 
-        def get_dynamic_competitors(target_handle: str) -> list:
-            import requests
-            import os
-            import time as _time
-            import json
-            import re as _re
-
-            th_lower = target_handle.lower()
-
-            # ── Mutual-pin rules for the two main astro accounts ──────────────
-            IS_ARUN_PANDIT   = (th_lower == "astroarunpandit")
-            IS_ADITYA_KUNDLI = (th_lower == "adityakundli")
-
-            # ── Astro niche keyword detector ──────────────────────────────────
-            ASTRO_KEYWORDS = ["astro", "zodiac", "pandit", "acharya", "baba",
-                              "guru", "vedic", "kundli", "tarot", "jyotish"]
-            IS_ASTRO_NICHE = any(k in th_lower for k in ASTRO_KEYWORDS)
-
-            # ── Guaranteed hand-picked astrology accounts (always in the pool) ─
-            # These are real individual creators confirmed by the user.
-            ASTRO_CORE = [
-                "astro_parduman",             # instagram.com/astro_parduman/
-                "askin_astrology",            # instagram.com/askin_astrology/
-                "astrologerdivapratihast",    # instagram.com/astrologerdivapratihast/
-                "arun_kumar_vyas_astrologer", # instagram.com/arun_kumar_vyas_astrologer/
-                "dr.jai_madan",
-                "sundeep.kochar",
-                "astrologer_shri_shivaya"
-            ]
-
-            def _apply_astro_rule(final_list: list) -> list:
-                """Pin the correct #1 astro competitor based on who is being audited."""
-                if not IS_ASTRO_NICHE:
-                    return final_list
-                if IS_ARUN_PANDIT:
-                    for h in ["astroarunpandit", "adityakundli"]:
-                        if h in final_list: final_list.remove(h)
-                    final_list.insert(0, "adityakundli")
-                elif IS_ADITYA_KUNDLI:
-                    for h in ["adityakundli", "astroarunpandit"]:
-                        if h in final_list: final_list.remove(h)
-                    final_list.insert(0, "astroarunpandit")
-                else:
-                    if "astroarunpandit" in final_list: final_list.remove("astroarunpandit")
-                    final_list.insert(0, "astroarunpandit")
-                return final_list
-
-            # ── Brand/platform blocklist ──────────────────────────────────────
-            BRAND_BLOCKLIST = {
-                "astrotalk", "astroyogi", "anytimeastro", "astrologyzone",
-                "ganeshaspeaks", "astrosage", "clickastro", "premastrologer",
-                "astromall", "futurepoint_india", "buzzfeedtasty", "foodnetwork",
-                "natgeotravel", "travelandleisure", "designboom", "creativeboom",
-                "businessinsider", "wallstreetjournal", "techcrunch", "engadget",
-                "wired", "forbes", "entrepreneur", "gymshark", "crossfit",
-            }
-
-            def _is_individual(handle: str) -> bool:
-                h = handle.lower()
-                if h in BRAND_BLOCKLIST: return False
-                for sfx in ["talk", "yogi", "zone", "sage", "mall", "point",
-                            "network", "media", "buzzfeed", "news"]:
-                    if h.endswith(sfx) and len(h) > len(sfx) + 3: return False
-                return True
-
-            def _clean_list(handles: list) -> list:
-                seen, out = set(), []
-                for h in handles:
-                    h = h.lower().strip()
-                    # Filter out the currently audited profile (th_lower) to prevent it from showing up as its own competitor
-                    if h and h != th_lower and h not in seen and _is_individual(h):
-                        seen.add(h); out.append(h)
-                return out
-
-            # ── _finalize: the core of Option C ──────────────────────────────
-            # For ASTROLOGY: merge dynamic finds WITH ASTRO_CORE (guaranteed base).
-            # For ALL OTHER niches: return dynamic finds as-is (fully dynamic).
-            def _finalize(dynamic_handles: list) -> list:
-                dynamic_clean = _clean_list(dynamic_handles)
-                if IS_ASTRO_NICHE:
-                    # Only show hardcoded competitors for astrology niche
-                    merged = _clean_list(ASTRO_CORE)
-                    return _apply_astro_rule(merged)
-                else:
-                    # Non-astro: purely dynamic, no hardcoded injection
-                    return dynamic_clean
-
-            # ── 24-hour file cache for LLM results ───────────────────────────
-            # Avoids Gemini rate-limit failures on repeated audits of same handle.
-            _CACHE_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "competitor_cache.json")
-            _CACHE_TTL  = 86400  # 24 hours
-
-            def _cache_get(handle: str):
-                try:
-                    if os.path.exists(_CACHE_PATH):
-                        with open(_CACHE_PATH, "r", encoding="utf-8") as f:
-                            cache = json.load(f)
-                        entry = cache.get(handle)
-                        if entry and (_time.time() - entry.get("ts", 0)) < _CACHE_TTL:
-                            print(f"DEBUG: Cache hit for '{handle}' — {len(entry['handles'])} handles")
-                            return entry["handles"]
-                except Exception as ce:
-                    print(f"DEBUG: Cache read error ({ce})")
-                return None
-
-            def _cache_set(handle: str, handles: list):
-                try:
-                    cache = {}
-                    if os.path.exists(_CACHE_PATH):
-                        with open(_CACHE_PATH, "r", encoding="utf-8") as f:
-                            cache = json.load(f)
-                    cache[handle] = {"ts": _time.time(), "handles": handles}
-                    with open(_CACHE_PATH, "w", encoding="utf-8") as f:
-                        json.dump(cache, f)
-                    print(f"DEBUG: Cached {len(handles)} handles for '{handle}'")
-                except Exception as ce:
-                    print(f"DEBUG: Cache write error ({ce})")
-
-            # ─────────────────────────────────────────────────────────────────
-            # CHECK LLM CACHE FIRST (fast path — avoids all API calls)
-            # ─────────────────────────────────────────────────────────────────
-            cached = _cache_get(th_lower)
-            if cached and len(cached) >= 2:
-                return _finalize(cached)
-
-            # ─────────────────────────────────────────────────────────────────
-            # METHOD 1 — Instagram web_profile_info + Chaining API
-            # ─────────────────────────────────────────────────────────────────
-            common_headers = {
-                'x-ig-app-id': '936619743392459',
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-                'Accept-Language': 'en-US,en;q=0.9',
-                'Accept': '*/*',
-                'Referer': f'https://www.instagram.com/{target_handle}/',
-            }
-            user_id = None
-            try:
-                r_profile = requests.get(
-                    f"https://www.instagram.com/api/v1/users/web_profile_info/?username={target_handle}",
-                    headers=common_headers, timeout=10
-                )
-                if r_profile.status_code == 200:
-                    user = r_profile.json().get('data', {}).get('user', {})
-                    user_id = user.get('id')
-                    related = [e.get('node', {}).get('username', '').lower()
-                               for e in user.get('edge_related_profiles', {}).get('edges', [])]
-                    if len(_clean_list(related)) >= 3:
-                        print(f"DEBUG: edge_related_profiles gave {len(related)} handles for {target_handle}")
-                        return _finalize(related)
-            except Exception as e:
-                print(f"DEBUG: web_profile_info failed ({e})")
-
-            if user_id:
-                try:
-                    _time.sleep(0.5)
-                    r_chain = requests.get(
-                        f"https://www.instagram.com/api/v1/discover/chaining/?target_id={user_id}",
-                        headers=common_headers, timeout=10
-                    )
-                    if r_chain.status_code == 200:
-                        chain = [u.get('username', '').lower() for u in r_chain.json().get('users', [])]
-                        if len(_clean_list(chain)) >= 3:
-                            print(f"DEBUG: Chaining API gave {len(chain)} handles for {target_handle}")
-                            return _finalize(chain)
-                        else:
-                            print(f"DEBUG: Chaining API returned too few individual accounts — falling back to LLM")
-                except Exception as e:
-                    print(f"DEBUG: Chaining API failed ({e})")
-
-            # ─────────────────────────────────────────────────────────────────
-            # METHOD 2 — LLM (Gemini / OpenRouter) with 24-hour cache
-            # ─────────────────────────────────────────────────────────────────
-            try:
-                gemini_key = os.getenv("GEMINI_API_KEY")
-                if not gemini_key: raise ValueError("No Gemini key")
-
-                prompt = (
-                    f"Instagram handle: @{target_handle}\n\n"
-                    "Task: Find 7 INDIVIDUAL CREATOR accounts on Instagram in the same niche.\n\n"
-                    "STRICT RULES:\n"
-                    "- Return ONLY individual person/creator accounts (real humans who post content)\n"
-                    "- BANNED (do NOT return): astrotalk, astroyogi, anytimeastro, ganeshaspeaks, "
-                    "astrosage — these are apps/brands, NOT individual creators\n"
-                    "- Return real individual people only, not companies or platforms\n"
-                    "- Same country/region as the target handle\n\n"
-                    "Return ONLY: handle1,handle2,handle3,handle4,handle5,handle6,handle7\n"
-                    "No @ symbols. No spaces. No explanation. Just the comma-separated list."
-                )
-
-                models = ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-1.5-flash-latest", "gemini-1.5-pro-latest"]
-                text, success = "", False
-                import time as _t
-                for model in models:
-                    url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={gemini_key.strip()}"
-                    for attempt in range(2):
-                        resp = requests.post(url, json={"contents": [{"parts": [{"text": prompt}]}],
-                                                        "generationConfig": {"temperature": 0.1}}, timeout=15)
-                        if resp.status_code == 429:
-                            _t.sleep(attempt + 1); continue
-                        if resp.ok:
-                            text = resp.json().get("candidates", [])[0].get("content", {}).get("parts", [])[0].get("text", "")
-                            success = True; break
-                        break
-                    if success: break
-
-                if not success:
-                    or_key = os.getenv("OPENROUTER_API_KEY")
-                    if or_key:
-                        or_resp = requests.post(
-                            "https://openrouter.ai/api/v1/chat/completions",
-                            json={"model": "google/gemini-2.5-flash",
-                                  "messages": [{"role": "user", "content": prompt}],
-                                  "temperature": 0.1},
-                            headers={"Authorization": f"Bearer {or_key.strip()}"}, timeout=15
-                        )
-                        text = or_resp.json()["choices"][0]["message"]["content"]
-                        success = True
-
-                if success and text:
-                    cleaned_text = _re.sub(r'```[a-zA-Z]*\n', '', text).replace('```', '')
-                    last_line = [l for l in cleaned_text.split('\n') if l.strip()][-1]
-                    raw = [_re.sub(r'[^a-z0-9._]', '', h.strip().lower())
-                           for h in last_line.replace("@", "").split(",") if h.strip()]
-                    llm_handles = _clean_list([h for h in raw if h])
-                    if len(llm_handles) >= 3:
-                        print(f"DEBUG: LLM gave {len(llm_handles)} handles for {target_handle} — caching")
-                        _cache_set(th_lower, llm_handles)  # save to 24hr cache
-                        return _finalize(llm_handles)
-
-            except Exception as e:
-                print(f"DEBUG: LLM failed ({e}) — falling through to static fallback")
-
-            # ─────────────────────────────────────────────────────────────────
-            # METHOD 3 — Static fallback (last resort only)
-            # Astrology: ASTRO_CORE + mutual pin   |   Other niches: hardcoded pools
-            # ─────────────────────────────────────────────────────────────────
-            th = th_lower
-
-            if IS_ARUN_PANDIT:
-                astro_pool = ["adityakundli"] + ASTRO_CORE
-            elif IS_ADITYA_KUNDLI:
-                astro_pool = ["astroarunpandit"] + ASTRO_CORE
-            else:
-                astro_pool = ["astroarunpandit", "adityakundli"] + ASTRO_CORE
-
-            sports_pool        = ["virat.kohli", "mahi7781", "rohitsharma45", "hardikpandya93", "neeraj____chopra", "smriti_mandhana"]
-            entertainment_pool = ["shraddhakapoor", "priyankachopra", "aliaabhatt", "deepikapadukone", "iamsrk", "katrinakaif"]
-            fashion_pool       = ["komalpandeyofficial", "thatbohogirl", "masabagupta", "aashnashroff", "siddharth93batra", "diipakhosla"]
-            travel_pool        = ["anunaysood", "bruisedpassports", "tanyakhanijow", "shenaztreasury", "larissa_wlc", "aakanksha.monga"]
-            art_pool           = ["madstuffwithrob", "aliciasouza", "thefilmyowl", "neha.doodles", "vimalchandran", "pranitart"]
-            finance_pool       = ["ankurwarikoo", "financewithsharan", "rachanaranade", "pranjalkamra", "fincocktail", "akshat.shrivastava"]
-            education_pool     = ["dhruvrathee", "physicswallah", "khansirgsofficial", "dr_vikas_divyakirti", "aman.dhattarwal", "shradhakhapra"]
-            tech_pool          = ["technicalguruji", "shlok_srivastava", "techbar", "trakin_tech", "beebomco", "ruhezamrel"]
-            fitness_pool       = ["sahilkhan", "ranveer.allahbadia", "guru_mann", "sangram_chougule_official", "sonali_swami", "yatindersingh_official"]
-            food_pool          = ["ranveer.brar", "sanjeevkapoor", "yourfoodlab", "kunalkapur", "kavitaskitchen", "hebbars.kitchen"]
-            general_pool       = ["bhuvan.bam22", "carryminati", "ashishchanchlani", "prajaktakoli", "kushakapila", "harshbeniwal"]
-
-            if IS_ASTRO_NICHE:
-                result = [c for c in astro_pool if c != th][:5]
-                return _apply_astro_rule(result)
-            elif any(k in th for k in ["cric","virat","kohli","dhoni","rohit","sachin","sport","game","play","football","soccer","tennis","athlete"]):
-                return [c for c in sports_pool if c != th][:5]
-            elif any(k in th for k in ["bolly","holly","actor","actress","cinema","movie","music","singer","star","celebrity","show","tv"]):
-                return [c for c in entertainment_pool if c != th][:5]
-            elif any(k in th for k in ["fashion","beauty","makeup","style","wear","look","glam","dress"]):
-                return [c for c in fashion_pool if c != th][:5]
-            elif any(k in th for k in ["travel","tour","explore","wild","cam","lens","wander"]):
-                return [c for c in travel_pool if c != th][:5]
-            elif any(k in th for k in ["art","draw","paint","sketch","illustr","creativ"]):
-                return [c for c in art_pool if c != th][:5]
-            elif any(k in th for k in ["biz","money","market","finance","invest","wealth","trade"]):
-                return [c for c in finance_pool if c != th][:5]
-            elif any(k in th for k in ["edu","learn","science","fact","know","study","teach","math","physic"]):
-                return [c for c in education_pool if c != th][:5]
-            elif any(k in th for k in ["tech","code","dev","program","software"]):
-                return [c for c in tech_pool if c != th][:5]
-            elif any(k in th for k in ["fit","gym","workout","muscle","training","yoga"]):
-                return [c for c in fitness_pool if c != th][:5]
-            elif any(k in th for k in ["food","chef","eat","cook","recipe","kitchen"]):
-                return [c for c in food_pool if c != th][:5]
-            else:
-                return [c for c in general_pool if c != th][:5]
-
-        competitor_handles = get_dynamic_competitors(handle)
-
         competitor_metrics_list = []
 
         def fetch_competitor(comp_handle, rank):
@@ -765,7 +756,11 @@ def run_live_apify_competitor_audit(job_id: str, profile_url: str, date_from: st
             is_mock = False
             is_invalid = False
             try:
-                comp_posts = scrape_latest_15_posts(comp_url, date_from, date_to)
+                # Check bulk scraped results first to avoid slow individual Apify calls
+                comp_posts = bulk_results.get(comp_handle.lower())
+                if not comp_posts:
+                    comp_posts = scrape_latest_15_posts(comp_url, date_from, date_to)
+                
                 # Filter out metadata/profile items
                 comp_posts = [
                     p for p in comp_posts
