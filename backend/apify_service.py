@@ -844,24 +844,17 @@ def scrape_latest_15_posts(profile_url: str, date_from: str = None, date_to: str
         except Exception as e:
             print(f"[IG API Failed] for '{username}': {e}. Trying Apify...")
 
-    # ── Step 1.5: CSV Cache check for pre-fetched bulk data ──
+
+    # ── Step 2: Apify scrape — ALWAYS runs to guarantee real ownerFollowerCount ──
     apify_posts = None
     try:
-        cached_posts = _load_csv_for_profile(username)
-        if cached_posts and len(cached_posts) >= (15 if not (date_from or date_to) else 1):
-            print(f"[CSV Cache] Found {len(cached_posts)} pre-fetched posts for '{username}', skipping single Apify scrape.")
-            apify_posts = cached_posts
+        print(f"[Apify] Fetching posts for '{username}' (IG API had {len(public_api_posts) if public_api_posts else 0} posts)...")
+        apify_posts = _scrape_via_apify(profile_url, date_from)
+        print(f"[Apify] Got {len(apify_posts)} non-pinned posts for '{username}'.")
     except Exception as e:
-        pass
+        print(f"[Apify Failed] for '{username}': {e}.")
 
-    # ── Step 2: Apify scrape — always run when IG API returned < 15 and not in cache ──
-    if not apify_posts:
-        try:
-            print(f"[Apify] Fetching posts for '{username}' (IG API had {len(public_api_posts) if public_api_posts else 0} posts)...")
-            apify_posts = _scrape_via_apify(profile_url, date_from)
-            print(f"[Apify] Got {len(apify_posts)} non-pinned posts for '{username}'.")
-        except Exception as e:
-            print(f"[Apify Failed] for '{username}': {e}.")
+
 
     # ── Step 3: Merge IG API + Apify, dedup by shortcode, sort by recency ──
     if public_api_posts or apify_posts:

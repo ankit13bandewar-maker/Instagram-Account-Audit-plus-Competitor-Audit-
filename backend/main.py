@@ -1158,7 +1158,24 @@ def get_audit_status(job_id: str):
                 
     return job
 
+@app.post("/api/clear-cache")
+def clear_cache():
+    """Wipe the CSV post cache and history DB. Useful to force fresh Apify scrapes on the live server."""
+    import glob
+    deleted = []
+    # Clear CSV cache
+    if os.path.exists(CSV_PATH := os.path.join(base_dir, "data_cache", "instagram_posts_dataset.csv")):
+        os.remove(CSV_PATH)
+        deleted.append("instagram_posts_dataset.csv")
+    # Clear history DB
+    if os.path.exists(HISTORY_DB_PATH):
+        with open(HISTORY_DB_PATH, "w") as f:
+            json.dump({}, f)
+        deleted.append("history_db.json (reset to empty)")
+    return {"cleared": deleted, "message": "Cache cleared. Next audit will fetch fresh data from Apify."}
+
 @app.get("/api/history-list")
+
 def get_history_list():
     try:
         with open(HISTORY_DB_PATH, "r", encoding="utf-8") as f:
