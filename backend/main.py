@@ -481,6 +481,8 @@ def run_live_apify_competitor_audit(job_id: str, profile_url: str, date_from: st
 
         parsed_posts = []
         for idx, post in enumerate(raw_posts, 1):
+            if post is None or not isinstance(post, dict):
+                continue
             likes = max(0, int(post.get("likesCount") if post.get("likesCount") is not None else post.get("likes", 0)))
             comments = max(0, int(post.get("commentsCount") if post.get("commentsCount") is not None else post.get("comments", 0)))
             timestamp = post.get("timestamp") if post.get("timestamp") else post.get("date", "—")
@@ -537,6 +539,8 @@ def run_live_apify_competitor_audit(job_id: str, profile_url: str, date_from: st
         min_date = None
         max_date = None
         for post in raw_posts:
+            if post is None or not isinstance(post, dict):
+                continue
             # Check if post is a Reel
             is_reel = post.get("productType") == "clips" or post.get("type") == "clips"
             if is_reel:
@@ -579,6 +583,8 @@ def run_live_apify_competitor_audit(job_id: str, profile_url: str, date_from: st
         min_reach_date = None
         max_reach_date = None
         for post in raw_posts:
+            if post is None or not isinstance(post, dict):
+                continue
             # Check if post is video or reel
             is_video_or_reel = post.get("productType") == "clips" or post.get("type") == "clips" or post.get("type") == "Video"
             if is_video_or_reel:
@@ -615,6 +621,13 @@ def run_live_apify_competitor_audit(job_id: str, profile_url: str, date_from: st
                         "views": views
                     })
                 curr += timedelta(days=1)
+
+        # Filter out any None/non-dict entries that would crash pd.DataFrame
+        parsed_posts = [p for p in parsed_posts if p is not None and isinstance(p, dict)]
+        
+        if not parsed_posts:
+            audit_jobs[job_id] = {"status": "error", "error": f"No valid posts could be parsed for @{handle}."}
+            return
 
         df = pd.DataFrame(parsed_posts)
         
@@ -884,6 +897,8 @@ def run_live_apify_competitor_audit(job_id: str, profile_url: str, date_from: st
         reels_data = {"count": 0, "likes": 0, "comments": 0, "posts": []}
         static_data = {"count": 0, "likes": 0, "comments": 0, "posts": []}
         for idx, p in enumerate(raw_posts, 1):
+            if p is None or not isinstance(p, dict):
+                continue
             post_type = p.get("type")
             product_type = p.get("productType")
             p_likes = max(0, int(p.get("likesCount") if p.get("likesCount") is not None else p.get("likes", 0)))
@@ -1215,10 +1230,15 @@ def get_history_list():
     except:
         return []
         
+    if not isinstance(history_db, dict):
+        return []
+        
     summary_list = []
     for username, payload in history_db.items():
-        client_metrics = payload.get("client_metrics", {})
-        calc = client_metrics.get("calculated_metrics", {})
+        if not isinstance(payload, dict):
+            continue
+        client_metrics = payload.get("client_metrics", {}) or {}
+        calc = client_metrics.get("calculated_metrics", {}) or {}
         summary_list.append({
             "username": username,
             "audited_at": payload.get("audited_at"),
