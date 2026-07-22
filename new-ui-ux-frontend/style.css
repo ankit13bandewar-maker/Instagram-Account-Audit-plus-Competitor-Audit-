@@ -2520,10 +2520,6 @@ button {
 }
 
 /* ── Mobile patch: profile strip + fixed-height feeds ── */
-.stat-box-row {
-  grid-template-columns: 1fr 1fr;
-}
-
 @media (max-width: 1080px) {
   .profile-strip {
     flex-direction: column;
@@ -2539,28 +2535,18 @@ button {
   }
 }
 
+/* ── Mobile patch: profile strip + fixed-height feeds ── */
+@media (max-width: 1080px) {
+  .profile-strip {
+    flex-direction: column;
+    align-items: stretch;
+  }
 
-@media (max-width: 480px) {
+  .ps-spacer {
+    display: none;
+  }
+
   .stat-box-row {
-    grid-template-columns: 1fr;
-  }
-
-  .stat-box-row>div:first-child {
-    border-right: none !important;
-    border-bottom: 1px solid var(--border);
-  }
-
-  #feed-card,
-  #post-deep-dive-viewer {
-    height: auto;
-    max-height: 340px;
-  }
-
-  .linkrow {
-    padding: 14px 16px;
-  }
-
-  .lr-stat {
-    font-size: 12px;
+    grid-template-columns: 1fr 1fr;
   }
 }

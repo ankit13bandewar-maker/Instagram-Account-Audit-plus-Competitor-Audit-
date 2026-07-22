@@ -485,26 +485,33 @@
           </div>
 
           <!-- ── Stats row ── -->
-          <div class="grid g4">
-            <div class="card statline">
-              <div class="v"><span class="cu" id="median-likes-value" data-val="0">0</span></div>
-              <div class="k">Median Likes</div>
-              <div class="d">A normal post lands around here.</div>
+          <div style="display: flex; flex-direction: column; gap: 16px;">
+            <!-- Row 1 Box -->
+            <div style="display: grid; grid-template-columns: 1fr 1fr; border: 1px solid var(--border); border-radius: 16px; background: var(--surf); overflow: hidden;">
+              <div class="statline" style="padding: 22px; border-right: 1px solid var(--border);">
+                <div class="v"><span class="cu" id="median-likes-value" data-val="0">0</span></div>
+                <div class="k">Median Likes</div>
+                <div class="d">A normal post lands around here.</div>
+              </div>
+              <div class="statline" style="padding: 22px;">
+                <div class="v"><span class="cu" id="median-comments-value" data-val="0">0</span></div>
+                <div class="k">Median Comments</div>
+                <div class="d">How many people usually comment.</div>
+              </div>
             </div>
-            <div class="card statline">
-              <div class="v"><span class="cu" id="median-comments-value" data-val="0">0</span></div>
-              <div class="k">Median Comments</div>
-              <div class="d">How many people usually comment.</div>
-            </div>
-            <div class="card statline">
-              <div class="v"><span class="cu" id="average-likes-value" data-val="0">0</span></div>
-              <div class="k">Average Likes per Post</div>
-              <div class="d">A few big posts pull this number up.</div>
-            </div>
-            <div class="card statline">
-              <div class="k">Busiest Posting Day</div>
-              <div class="v" id="most-active-day-value">--</div>
-              <div class="d">The day of the week they post most often.</div>
+
+            <!-- Row 2 Box -->
+            <div style="display: grid; grid-template-columns: 1fr 1fr; border: 1px solid var(--border); border-radius: 16px; background: var(--surf); overflow: hidden;">
+              <div class="statline" style="padding: 22px; border-right: 1px solid var(--border);">
+                <div class="v"><span class="cu" id="average-likes-value" data-val="0">0</span></div>
+                <div class="k">Average Likes per Post</div>
+                <div class="d">A few big posts pull this number up.</div>
+              </div>
+              <div class="statline" style="padding: 22px;">
+                <div class="k">Busiest Posting Day</div>
+                <div class="v" id="most-active-day-value">--</div>
+                <div class="d">The day of the week they post most often.</div>
+              </div>
             </div>
           </div>
 
