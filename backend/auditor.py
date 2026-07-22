@@ -511,14 +511,19 @@ def run_batch_post_audits(posts, reels_median_likes, reels_median_comments, stat
             if idx in data:
                 result[idx] = data[idx]
             else:
-                # Fallback for individual missing items
-                result[idx] = generate_local_fallback_brief(p, p["likes"] >= median_likes, median_likes, median_comments)
+                m_likes = reels_median_likes if p.get("is_video") else static_median_likes
+                m_comments = reels_median_comments if p.get("is_video") else static_median_comments
+                result[idx] = generate_local_fallback_brief(p, p["likes"] >= m_likes, m_likes, m_comments)
         return result
         
     except Exception as e:
         print(f"DEBUG: Batch audit Gemini execution failed: {e}. Cascading to high-fidelity dynamic local fallbacks.")
-        # Cascade seamlessly to local dynamic briefs
-        return {p["index"]: generate_local_fallback_brief(p, p["likes"] >= median_likes, median_likes, median_comments) for p in posts}
+        fallback_result = {}
+        for p in posts:
+            m_likes = reels_median_likes if p.get("is_video") else static_median_likes
+            m_comments = reels_median_comments if p.get("is_video") else static_median_comments
+            fallback_result[p["index"]] = generate_local_fallback_brief(p, p["likes"] >= m_likes, m_likes, m_comments)
+        return fallback_result
 
 
 def run_senior_audit(raw_posts):
