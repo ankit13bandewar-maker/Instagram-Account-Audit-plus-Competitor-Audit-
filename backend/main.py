@@ -1100,6 +1100,8 @@ def run_live_apify_competitor_audit(job_id: str, profile_url: str, date_from: st
         audit_jobs[job_id] = {"status": "completed", "data": response_payload}
         
     except Exception as e:
+        import traceback
+        traceback.print_exc()
         print(f"Background task error: {e}")
         audit_jobs[job_id] = {"status": "error", "error": str(e)}
 
