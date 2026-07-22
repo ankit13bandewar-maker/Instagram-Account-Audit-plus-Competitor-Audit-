@@ -288,10 +288,7 @@ def bulk_scrape_via_apify(profile_urls: list, date_from: str = None) -> dict:
             _save_to_csv(p_url, posts)
             print(f"[Apify Bulk] Saved {len(posts)} posts for '{uname}'")
         else:
-            print(f"[Apify Bulk] Warning: No posts found for '{uname}' in bulk run. Generating fallback.")
-            p_url = profile_url_map.get(uname, f"https://www.instagram.com/{uname}")
-            fallback_posts = _load_csv_for_profile(uname) or _generate_highly_authentic_posts(p_url)
-            username_posts_map[uname] = fallback_posts
+            print(f"[Apify Bulk] Warning: No posts found for '{uname}' in bulk run.")
 
     return username_posts_map
 
@@ -968,5 +965,7 @@ def scrape_latest_15_posts(profile_url: str, date_from: str = None, date_to: str
         print(f"[CSV Fallback Failed] for '{username}': {e}.")
 
     # ── Step 5: Final Deterministic Fallback ──
-    print("[Final Fallback] Live scraping unavailable. Returning generated authentic posts.")
-    return _generate_highly_authentic_posts(profile_url)[:MAX_POSTS]
+    print("[Final Fallback] No real posts found. Returning empty instead of mock data.")
+    return []
+    # print("[Final Fallback] Returning 15 fully generated posts.")
+    # return _generate_highly_authentic_posts(profile_url)[:MAX_POSTS]
