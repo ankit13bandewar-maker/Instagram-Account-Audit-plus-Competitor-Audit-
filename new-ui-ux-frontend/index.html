@@ -186,41 +186,43 @@
         </div>
 
         <!-- ── 4 metric cards ── -->
-        <div class="grid g4">
-
-          <div class="card metric good" id="kpi-er-card">
-            <div class="metric-top">
-              <span class="label">How Much People Interact</span>
+        <div style="display: flex; flex-direction: column; gap: 16px;">
+          <!-- Row 1 Box -->
+          <div style="display: grid; grid-template-columns: 1fr 1fr; border: 1px solid var(--border); border-radius: 16px; background: var(--surf); overflow: hidden;">
+            <div class="metric good" id="kpi-er-card" style="padding: 22px; border-right: 1px solid var(--border);">
+              <div class="metric-top">
+                <span class="label">How Much People Interact</span>
+              </div>
+              <div class="big"><span class="cu" id="kpi-er" data-val="0">0</span><span class="u">%</span></div>
+              <div class="desc">Engagement Rate</div>
             </div>
-            <div class="big"><span class="cu" id="kpi-er" data-val="0">0</span><span class="u">%</span></div>
-            <div class="desc">Engagement Rate</div>
-          </div>
-
-          <div class="card metric pos" id="kpi-authenticity-card">
-            <div class="metric-top">
-              <span class="label">Followers That Look Real</span>
-            </div>
-            <div class="big"><span class="cu" id="kpi-authenticity" data-val="0">0</span><span class="u">%</span></div>
-            <div class="desc">Real, active people who actually see and react to posts.</div>
-          </div>
-
-          <div class="card metric warnv" id="kpi-inactive-card">
-            <div class="metric-top">
-              <span class="label">Inactive Followers</span>
-            </div>
-            <div class="big"><span class="cu" id="kpi-inactive" data-val="0">0</span><span class="u">%</span></div>
-            <div class="desc">These accounts seem to be bots or people who never log in.</div>
-          </div>
-
-          <div class="card metric" id="kpi-velocity-card">
-            <div class="metric-top" style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
-              <span class="label" style="font-size: 16px; font-weight: 500; color: var(--text); margin: 0; text-transform: uppercase;">Avg. Posts / Day</span>
-            </div>
-            <div class="big" style="margin-top: 12px; display: flex; align-items: center; gap: 12px;">
-              <span style="font-size: 32px; font-weight: 600; color: var(--text); line-height: 1;" class="cu" id="kpi-velocity" data-val="0">0</span>
+            <div class="metric pos" id="kpi-authenticity-card" style="padding: 22px;">
+              <div class="metric-top">
+                <span class="label">Followers That Look Real</span>
+              </div>
+              <div class="big"><span class="cu" id="kpi-authenticity" data-val="0">0</span><span class="u">%</span></div>
+              <div class="desc">Real, active people who actually see and react to posts.</div>
             </div>
           </div>
 
+          <!-- Row 2 Box -->
+          <div style="display: grid; grid-template-columns: 1fr 1fr; border: 1px solid var(--border); border-radius: 16px; background: var(--surf); overflow: hidden;">
+            <div class="metric warnv" id="kpi-inactive-card" style="padding: 22px; border-right: 1px solid var(--border);">
+              <div class="metric-top">
+                <span class="label">Inactive Followers</span>
+              </div>
+              <div class="big"><span class="cu" id="kpi-inactive" data-val="0">0</span><span class="u">%</span></div>
+              <div class="desc">These accounts seem to be bots or people who never log in.</div>
+            </div>
+            <div class="metric" id="kpi-velocity-card" style="padding: 22px;">
+              <div class="metric-top" style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
+                <span class="label" style="font-size: 16px; font-weight: 500; color: var(--text); margin: 0; text-transform: uppercase;">Avg. Posts / Day</span>
+              </div>
+              <div class="big" style="margin-top: 12px; display: flex; align-items: center; gap: 12px;">
+                <span style="font-size: 32px; font-weight: 600; color: var(--text); line-height: 1;" class="cu" id="kpi-velocity" data-val="0">0</span>
+              </div>
+            </div>
+          </div>
         </div>
 
         <!-- ── Videos vs Static Posts ── -->
