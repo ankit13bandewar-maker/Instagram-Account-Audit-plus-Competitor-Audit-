@@ -159,25 +159,29 @@
             </a>
           </div>
           <div class="ps-spacer" style="flex: 1;"></div>
-          <div class="ps-div"></div>
-          <div class="ps-stat">
-            <div class="k" style="color: #6b7280; font-size: 11px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; margin-bottom: 4px;">Posts Looked At</div>
-            <div class="v" id="stat-posts-count" style="font-weight: 600; font-size: 18px; color: var(--text);">0</div>
-          </div>
-          <div class="ps-div"></div>
-          <div class="ps-stat">
-            <div class="k" style="color: #6b7280; font-size: 11px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; margin-bottom: 4px;">Total Likes</div>
-            <div class="v" id="stat-total-likes" style="font-weight: 600; font-size: 18px; color: var(--text);">0</div>
-          </div>
-          <div class="ps-div"></div>
-          <div class="ps-stat">
-            <div class="k" style="color: #6b7280; font-size: 11px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; margin-bottom: 4px;">Total Comments</div>
-            <div class="v" id="stat-total-comments" style="font-weight: 600; font-size: 18px; color: var(--text);">0</div>
-          </div>
-          <div class="ps-div"></div>
-          <div class="ps-stat">
-            <div class="k" style="color: #6b7280; font-size: 11px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; margin-bottom: 4px;">Total Followers</div>
-            <div class="v" id="stat-total-followers" style="font-weight: 600; font-size: 18px; color: var(--text);">0</div>
+          <div class="metrics-grid" style="display: flex; flex-direction: column; gap: 8px;">
+            <!-- Row 1 Box -->
+            <div style="display: grid; grid-template-columns: 1fr 1fr; border: 1px solid var(--border); border-radius: 8px; background: var(--bg-card); overflow: hidden;">
+              <div style="padding: 10px 16px; border-right: 1px solid var(--border);">
+                <div style="color: #6b7280; font-size: 11px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; margin-bottom: 4px;">Posts Looked At</div>
+                <div id="stat-posts-count" style="font-weight: 600; font-size: 18px; color: var(--text);">0</div>
+              </div>
+              <div style="padding: 10px 16px;">
+                <div style="color: #6b7280; font-size: 11px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; margin-bottom: 4px;">Total Followers</div>
+                <div id="stat-total-followers" style="font-weight: 600; font-size: 18px; color: var(--text);">0</div>
+              </div>
+            </div>
+            <!-- Row 2 Box -->
+            <div style="display: grid; grid-template-columns: 1fr 1fr; border: 1px solid var(--border); border-radius: 8px; background: var(--bg-card); overflow: hidden;">
+              <div style="padding: 10px 16px; border-right: 1px solid var(--border);">
+                <div style="color: #6b7280; font-size: 11px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; margin-bottom: 4px;">Total Likes</div>
+                <div id="stat-total-likes" style="font-weight: 600; font-size: 18px; color: var(--text);">0</div>
+              </div>
+              <div style="padding: 10px 16px;">
+                <div style="color: #6b7280; font-size: 11px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; margin-bottom: 4px;">Total Comments</div>
+                <div id="stat-total-comments" style="font-weight: 600; font-size: 18px; color: var(--text);">0</div>
+              </div>
+            </div>
           </div>
         </div>
 
