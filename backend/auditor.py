@@ -223,11 +223,29 @@ def call_gemini_api(prompt, system_instruction=None, is_json=False):
             or_headers = {"Authorization": f"Bearer {openrouter_key.strip()}"}
             or_resp = requests.post(or_url, json=or_payload, headers=or_headers, timeout=25)
             or_resp.raise_for_status()
-            return or_resp.json()["choices"][0]["message"]["content"]
+            or_data = or_resp.json()
+            if isinstance(or_data, dict) and "choices" in or_data and isinstance(or_data["choices"], list) and len(or_data["choices"]) > 0:
+                msg = or_data["choices"][0].get("message")
+                if isinstance(msg, dict):
+                    return msg.get("content", "")
+            return ""
         else:
             resp.raise_for_status()
             
-    return resp.json().get("candidates", [])[0].get("content", {}).get("parts", [])[0].get("text", "")
+    res_data = resp.json()
+    if isinstance(res_data, dict):
+        candidates = res_data.get("candidates")
+        if isinstance(candidates, list) and len(candidates) > 0:
+            first_cand = candidates[0]
+            if isinstance(first_cand, dict):
+                content = first_cand.get("content")
+                if isinstance(content, dict):
+                    parts = content.get("parts")
+                    if isinstance(parts, list) and len(parts) > 0:
+                        first_part = parts[0]
+                        if isinstance(first_part, dict):
+                            return first_part.get("text", "")
+    return ""
 
 
 def generate_local_fallback_brief(post, is_above, median_likes, median_comments):
