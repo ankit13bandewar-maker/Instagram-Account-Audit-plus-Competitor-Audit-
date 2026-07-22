@@ -1140,29 +1140,36 @@ function _renderFeedList(feedId, viewerId, posts, medianLikes, stateKey) {
       ? `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>`
       : `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>`;
 
+    const inlineAnalysisHtml = isSelected ? getPostDeepDiveHtml(post) : '';
+
     return `
-      <div class="${activeClass}" data-post-index="${post.index}">
-        <div class="feed-rank">${i + 1}</div>
-        <div class="feed-thumb">${postIcon}</div>
-        <div class="feed-body">
-          <div class="ttl">
-            ${post.index} 
-            ${isWin 
-              ? '<span style="color:var(--accent);font-weight:800;font-size:10px;margin-left:6px;padding:2px 6px;border-radius:4px;background:rgba(198,255,58,0.1);">WIN</span>' 
-              : '<span style="color:var(--neg);font-weight:800;font-size:10px;margin-left:6px;padding:2px 6px;border-radius:4px;background:rgba(255,99,99,0.1);">FIX</span>'}
-            <span style="color:var(--faint);font-weight:500;font-size:11px;margin-left:4px;">· ${fmtTrendDate(post.date)}</span>
+      <div class="feed-item-group" style="margin-bottom: 6px;">
+        <div class="${activeClass}" data-post-index="${post.index}">
+          <div class="feed-rank">${i + 1}</div>
+          <div class="feed-thumb">${postIcon}</div>
+          <div class="feed-body">
+            <div class="ttl">
+              ${post.index} 
+              ${isWin 
+                ? '<span style="color:var(--accent);font-weight:800;font-size:10px;margin-left:6px;padding:2px 6px;border-radius:4px;background:rgba(198,255,58,0.1);">WIN</span>' 
+                : '<span style="color:var(--neg);font-weight:800;font-size:10px;margin-left:6px;padding:2px 6px;border-radius:4px;background:rgba(255,99,99,0.1);">FIX</span>'}
+              <span style="color:var(--faint);font-weight:500;font-size:11px;margin-left:4px;">· ${fmtTrendDate(post.date)}</span>
+            </div>
+            <div class="cap">${cleanSnippet}</div>
           </div>
-          <div class="cap">${cleanSnippet}</div>
+          <div class="feed-likes">
+            <span style="color: var(--neg);">❤</span> ${(post.likes || 0).toLocaleString()}
+            <a href="${resolvePostUrl(post)}" target="_blank" rel="noopener noreferrer" style="color:var(--accent);text-decoration:none;margin-left:8px;" title="View Live Post" onclick="event.stopPropagation()">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="display:inline-block;vertical-align:middle;">
+                <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
+                <polyline points="15 3 21 3 21 9"></polyline>
+                <line x1="10" y1="14" x2="21" y2="3"></line>
+              </svg>
+            </a>
+          </div>
         </div>
-        <div class="feed-likes">
-          <span style="color: var(--neg);">❤</span> ${(post.likes || 0).toLocaleString()}
-          <a href="${resolvePostUrl(post)}" target="_blank" rel="noopener noreferrer" style="color:var(--accent);text-decoration:none;margin-left:8px;" title="View Live Post" onclick="event.stopPropagation()">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="display:inline-block;vertical-align:middle;">
-              <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
-              <polyline points="15 3 21 3 21 9"></polyline>
-              <line x1="10" y1="14" x2="21" y2="3"></line>
-            </svg>
-          </a>
+        <div class="inline-analysis-card" id="inline-analysis-${feedId}-${post.index}" style="display: ${isSelected ? 'block' : 'none'}; margin-top: 8px; margin-bottom: 12px; border: 1px solid var(--border); border-radius: 12px; padding: 16px; background: var(--surf2);">
+          ${inlineAnalysisHtml}
         </div>
       </div>
     `;
@@ -1173,30 +1180,43 @@ function _renderFeedList(feedId, viewerId, posts, medianLikes, stateKey) {
     item.addEventListener('click', () => {
       const postIndex = item.getAttribute('data-post-index');
       const postObj = sortedPosts.find(p => p.index === postIndex);
-      if (postObj) {
-        feedContainer.querySelectorAll('.feed-item').forEach(el => el.classList.remove('active'));
+      if (!postObj) return;
+
+      const inlineBox = document.getElementById(`inline-analysis-${feedId}-${postIndex}`);
+      const isAlreadyActive = item.classList.contains('active');
+
+      // Hide all other inline analysis boxes in this feed
+      feedContainer.querySelectorAll('.inline-analysis-card').forEach(box => {
+        box.style.display = 'none';
+      });
+      feedContainer.querySelectorAll('.feed-item').forEach(el => el.classList.remove('active'));
+
+      if (isAlreadyActive) {
+        state[stateKey] = null;
+      } else {
         item.classList.add('active');
         state[stateKey] = postObj;
-        renderPostDeepDive(postObj, viewerId);
+        if (inlineBox) {
+          inlineBox.innerHTML = getPostDeepDiveHtml(postObj);
+          inlineBox.style.display = 'block';
+        }
       }
+
+      renderPostDeepDive(state[stateKey], viewerId);
     });
   });
 
   renderPostDeepDive(state[stateKey], viewerId);
 }
 
-function renderPostDeepDive(post, viewerId = 'post-deep-dive-viewer') {
-  const viewer = document.getElementById(viewerId);
-  if (!viewer) return;
-
+function getPostDeepDiveHtml(post) {
   if (!post) {
-    viewer.innerHTML = `
-      <div style="text-align:center; padding: 60px 20px; color: var(--faint);">
+    return `
+      <div style="text-align:center; padding: 40px 20px; color: var(--faint);">
         <h4>No Post Selected</h4>
         <p style="font-size:13px;">Select an item from the feed to load diagnostic details.</p>
       </div>
     `;
-    return;
   }
 
   const briefMarkdown = post.log_content || post.brief || 'No diagnostic audit brief available.';
@@ -1213,7 +1233,7 @@ function renderPostDeepDive(post, viewerId = 'post-deep-dive-viewer') {
   // Clean caption text of tags for clean render
   const captionTextOnly = caption.replace(/#[a-zA-Z0-9_]+/g, '').trim();
 
-  viewer.innerHTML = `
+  return `
     <div class="diag">
       <div class="diag-head">
         <div>
@@ -1239,6 +1259,13 @@ function renderPostDeepDive(post, viewerId = 'post-deep-dive-viewer') {
       </div>
     </div>
   `;
+}
+
+function renderPostDeepDive(post, viewerId = 'post-deep-dive-viewer') {
+  const viewer = document.getElementById(viewerId);
+  if (!viewer) return;
+
+  viewer.innerHTML = getPostDeepDiveHtml(post);
 }
 
 // ─── COMPETITORS CARD DRAWING ───
