@@ -471,6 +471,7 @@ def run_live_apify_competitor_audit(job_id: str, profile_url: str, date_from: st
         print(f"[Bulk Audit] Fetching {len(all_urls)} profiles in ONE Apify call: {all_urls}")
         bulk_results = bulk_scrape_via_apify(all_urls, date_from)
         if not isinstance(bulk_results, dict):
+            # Guard against NoneType keys error if apify fails
             bulk_results = {}
         print(f"[Bulk Audit] Bulk fetch complete. Got data for: {list(bulk_results.keys())}")
 
