@@ -226,12 +226,19 @@
       return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
     }
 
-    function getProxyImgUrl(displayUrl, postUrl) {
-      if (!displayUrl || displayUrl === 'undefined' || displayUrl === 'null' || displayUrl.includes('data:image/gif')) {
-        return "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='100' height='100' viewBox='0 0 24 24' fill='%23f1f5f9' stroke='%2394a3b8' stroke-width='1.5'><rect x='3' y='3' width='18' height='18' rx='2'/><circle cx='8.5' cy='8.5' r='1.5'/><path d='M21 15l-5-5L5 21'/></svg>";
+    function getProxyImgUrl(displayUrl, postUrl, type, index) {
+      if (displayUrl && typeof displayUrl === 'string' && displayUrl.startsWith('data:image/')) {
+        return displayUrl;
       }
-      if (displayUrl.startsWith('data:')) return displayUrl;
-      return `${BACKEND_URL}/api/proxy-image?url=${encodeURIComponent(displayUrl)}&post_url=${encodeURIComponent(postUrl || '')}`;
+      const isReel = (type && type.toString().toLowerCase().includes('video')) || (type && type.toString().toLowerCase().includes('reel'));
+      const label = (index || (isReel ? 'REEL' : 'POST')).toString().toUpperCase();
+      const c1 = isReel ? '%238b5cf6' : '%230284c7';
+      const c2 = isReel ? '%23d946ef' : '%2338bdf8';
+      const pathD = isReel 
+        ? "M52 40 L74 52 L52 64 Z" 
+        : "M44 42 H76 V62 H44 Z M52 48 A3 3 0 1 0 52 54 A3 3 0 1 0 52 48 M70 60 L62 50 L54 60";
+
+      return `data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='120' height='120' viewBox='0 0 120 120'><defs><linearGradient id='g' x1='0%25' y1='0%25' x2='100%25' y2='100%25'><stop offset='0%25' stop-color='${c1}'/><stop offset='100%25' stop-color='${c2}'/></linearGradient></defs><rect width='120' height='120' rx='12' fill='url(%23g)'/><circle cx='60' cy='52' r='22' fill='white' fill-opacity='0.25'/><path d='${pathD}' fill='white'/><text x='60' y='96' fill='white' font-family='system-ui, -apple-system, sans-serif' font-size='13' font-weight='800' text-anchor='middle' letter-spacing='0.5'>${label}</text></svg>`;
     }
 
     function escapeHtml(str) {
@@ -857,13 +864,12 @@
 
         <div class="glass-card" style="margin-bottom: 20px;">
           <h3 class="meta-text" style="color: var(--theme-ink); margin-bottom: 12px;">Top Reels Publications</h3>
-          <div style="display: flex; flex-direction: column; gap: 8px;">
-            ${reelsPosts.slice(0, 4).map(p => `
-              <div style="display: flex; justify-content: space-between; align-items: center; padding: 8px 12px; background: #f8fafc; border-radius: 6px; border: 1px solid var(--theme-card-border);">
+          <div style="display: flex; flex-direction: colu            ${reelsPosts.slice(0, 4).map(p => `
+              <a href="${resolvePostUrl(p)}" target="_blank" rel="noopener noreferrer" style="text-decoration: none; display: flex; justify-content: space-between; align-items: center; padding: 8px 12px; background: #f8fafc; border-radius: 6px; border: 1px solid var(--theme-card-border);">
                 <div style="display: flex; align-items: center; gap: 10px;">
-                  <img crossorigin="anonymous" src="${getProxyImgUrl(p.display_url || p.displayUrl, p.post_url)}" style="width: 36px; height: 36px; border-radius: 4px; object-fit: cover;" />
+                  <img crossorigin="anonymous" src="${getProxyImgUrl(p.display_url || p.displayUrl, p.post_url, 'Video', p.index)}" style="width: 36px; height: 36px; border-radius: 6px; object-fit: cover;" />
                   <div>
-                    <div style="font-weight: 700; font-size: 9.5pt; color: var(--theme-ink);">${p.index || 'Reel'}</div>
+                    <div style="font-weight: 700; font-size: 9.5pt; color: var(--theme-ink);">${p.index || 'Reel'} <span style="font-size: 8pt; color: #6b21a8; font-weight: 600;">↗</span></div>
                     <div style="font-size: 8pt; color: var(--theme-muted);">${formatDate(p.date || p.timestamp)}</div>
                   </div>
                 </div>
@@ -877,7 +883,7 @@
                     ${formatNumber(p.comments)}
                   </span>
                 </div>
-              </div>
+              </a>
             `).join('') || '<div style="font-size: 9pt; color: var(--theme-muted);">No Reels published.</div>'}
           </div>
         </div>
@@ -886,11 +892,11 @@
           <h3 class="meta-text" style="color: var(--theme-ink); margin-bottom: 12px;">Top Static Publications</h3>
           <div style="display: flex; flex-direction: column; gap: 8px;">
             ${staticPosts.slice(0, 4).map(p => `
-              <div style="display: flex; justify-content: space-between; align-items: center; padding: 8px 12px; background: #f8fafc; border-radius: 6px; border: 1px solid var(--theme-card-border);">
+              <a href="${resolvePostUrl(p)}" target="_blank" rel="noopener noreferrer" style="text-decoration: none; display: flex; justify-content: space-between; align-items: center; padding: 8px 12px; background: #f8fafc; border-radius: 6px; border: 1px solid var(--theme-card-border);">
                 <div style="display: flex; align-items: center; gap: 10px;">
-                  <img crossorigin="anonymous" src="${getProxyImgUrl(p.display_url || p.displayUrl, p.post_url)}" style="width: 36px; height: 36px; border-radius: 4px; object-fit: cover;" />
+                  <img crossorigin="anonymous" src="${getProxyImgUrl(p.display_url || p.displayUrl, p.post_url, 'Image', p.index)}" style="width: 36px; height: 36px; border-radius: 6px; object-fit: cover;" />
                   <div>
-                    <div style="font-weight: 700; font-size: 9.5pt; color: var(--theme-ink);">${p.index || 'Static Post'}</div>
+                    <div style="font-weight: 700; font-size: 9.5pt; color: var(--theme-ink);">${p.index || 'Static Post'} <span style="font-size: 8pt; color: #0284c7; font-weight: 600;">↗</span></div>
                     <div style="font-size: 8pt; color: var(--theme-muted);">${formatDate(p.date || p.timestamp)}</div>
                   </div>
                 </div>
@@ -904,8 +910,8 @@
                     ${formatNumber(p.comments)}
                   </span>
                 </div>
-              </div>
-            `).join('') || '<div style="font-size: 9pt; color: var(--theme-muted);">No Static posts published.</div>'}
+              </a>
+            `).join('') || '<div style="font-size: 9pt; color: var(--theme-muted);">No Static Posts published.</div>'}ublished.</div>'}
           </div>
         </div>
       `;

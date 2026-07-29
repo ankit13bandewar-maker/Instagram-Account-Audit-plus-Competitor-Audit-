@@ -22,13 +22,7 @@ const SVG_CIRCUMFERENCE = 314.159; // 2 * Math.PI * 50
 function resolvePostUrl(post) {
   if (!post) return '#';
 
-  // Priority 1: build from shortcode if present
-  const sc = post.shortcode || post.shortCode || post.code || '';
-  if (sc && typeof sc === 'string' && sc.trim() && sc.trim().length > 3) {
-    return 'https://www.instagram.com/p/' + sc.trim() + '/';
-  }
-
-  // Priority 2: candidate fields that point directly to a post/reel/tv
+  // 1. If explicit URL containing /p/, /reel/, /tv/ exists
   const candidates = [post.post_url, post.url, post.link, post.instagram_url];
   for (const c of candidates) {
     if (c && typeof c === 'string' && c.trim() && c.trim().toLowerCase() !== 'nan') {
@@ -39,7 +33,13 @@ function resolvePostUrl(post) {
     }
   }
 
-  // Priority 3: Fallback to full HTTP candidate URL
+  // 2. Real shortcode from Apify (ignore local mock hashes)
+  const sc = post.shortcode || post.shortCode || post.code || '';
+  if (sc && typeof sc === 'string' && sc.trim() && !post.is_mock) {
+    return 'https://www.instagram.com/p/' + sc.trim() + '/';
+  }
+
+  // 3. Fallback to valid profile/post HTTP URL
   for (const c of candidates) {
     if (c && typeof c === 'string' && c.trim() && c.trim().startsWith('http')) {
       return c.trim();
