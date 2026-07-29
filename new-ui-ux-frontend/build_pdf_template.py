@@ -1026,11 +1026,11 @@ html_content = """<!DOCTYPE html>
                   <textPath href="#arc-buzzing-path" xlink:href="#arc-buzzing-path" startOffset="50%" text-anchor="middle">BUZZING</textPath>
                 </text>
 
-                <!-- Emojis -->
-                <text x="44" y="118" font-size="15">😢</text>
-                <text x="96" y="98" font-size="15">😐</text>
-                <text x="186" y="98" font-size="15">😊</text>
-                <text x="238" y="118" font-size="15">🤩</text>
+                <!-- Emojis Just Below Arc Labels -->
+                <text x="58" y="88" font-size="14">😢</text>
+                <text x="110" y="62" font-size="14">😐</text>
+                <text x="180" y="62" font-size="14">😊</text>
+                <text x="230" y="88" font-size="14">🤩</text>
 
                 <!-- Dynamic Speedometer Needle Pointer -->
                 <g transform="translate(152, 138) rotate(${needleAngle})">
