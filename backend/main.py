@@ -39,6 +39,7 @@ app.add_middleware(
     allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["*"],
 )
 @app.get("/health")
 def health_check():
@@ -72,9 +73,10 @@ def proxy_image(url: str, post_url: str = None):
             
         cache_path = os.path.join(cache_dir, f"{cache_key}.jpg")
         
+        cors_hdrs = {"Access-Control-Allow-Origin": "*", "Access-Control-Allow-Methods": "*", "Access-Control-Allow-Headers": "*"}
         if os.path.exists(cache_path):
             with open(cache_path, "rb") as f:
-                return Response(content=f.read(), media_type="image/jpeg")
+                return Response(content=f.read(), media_type="image/jpeg", headers=cors_hdrs)
     except Exception as e:
         print(f"DEBUG: Cache read error: {e}")
         cache_path = None
@@ -89,7 +91,7 @@ def proxy_image(url: str, post_url: str = None):
                         f.write(img_resp.content)
                 except Exception:
                     pass
-            return Response(content=img_resp.content, media_type=img_resp.headers.get("Content-Type", "image/jpeg"))
+            return Response(content=img_resp.content, media_type=img_resp.headers.get("Content-Type", "image/jpeg"), headers=cors_hdrs)
         
         # 3. If it failed (likely URL signature expired) and we have a post_url, fetch a fresh og:image
         fallback_url = post_url or url
@@ -106,7 +108,7 @@ def proxy_image(url: str, post_url: str = None):
                                 f.write(img_resp2.content)
                         except Exception:
                             pass
-                    return Response(content=img_resp2.content, media_type=img_resp2.headers.get("Content-Type", "image/jpeg"))
+                    return Response(content=img_resp2.content, media_type=img_resp2.headers.get("Content-Type", "image/jpeg"), headers=cors_hdrs)
     except Exception:
         pass
     
