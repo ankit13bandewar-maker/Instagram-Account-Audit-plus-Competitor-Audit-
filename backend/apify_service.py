@@ -575,11 +575,9 @@ def _generate_highly_authentic_posts(profile_url: str) -> list:
             "timestamp": timestamp,
             "type": post_type,
             "caption": caption,
-            # Permanent fix: mock posts link to the profile page instead of a fake shortcode URL
-            # that would 404 on Instagram. The shortcode is kept empty to signal "no real post".
-            "url": f"https://www.instagram.com/{username}/",
-            "shortcode": "",
-            "displayUrl": "",
+            "url": f"https://www.instagram.com/p/{shortcode}/",
+            "shortcode": shortcode,
+            "displayUrl": f"https://picsum.photos/seed/{shortcode}/600/600",
             "videoPlayCount": video_play_count,
             "productType": product_type,
             "is_mock": True,

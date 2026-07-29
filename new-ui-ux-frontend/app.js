@@ -21,20 +21,31 @@ const SVG_CIRCUMFERENCE = 314.159; // 2 * Math.PI * 50
 // APP STATE
 function resolvePostUrl(post) {
   if (!post) return '#';
-  // Priority 1: explicit post_url or url field (already a full URL)
-  const candidates = [post.post_url, post.url, post.link];
+
+  // Priority 1: build from shortcode if present
+  const sc = post.shortcode || post.shortCode || post.code || '';
+  if (sc && typeof sc === 'string' && sc.trim() && sc.trim().length > 3) {
+    return 'https://www.instagram.com/p/' + sc.trim() + '/';
+  }
+
+  // Priority 2: candidate fields that point directly to a post/reel/tv
+  const candidates = [post.post_url, post.url, post.link, post.instagram_url];
   for (const c of candidates) {
     if (c && typeof c === 'string' && c.trim() && c.trim().toLowerCase() !== 'nan') {
       const trimmed = c.trim();
-      if (trimmed.startsWith('http')) return trimmed;
-      if (trimmed.startsWith('/')) return 'https://www.instagram.com' + trimmed;
+      if (trimmed.includes('/p/') || trimmed.includes('/reel/') || trimmed.includes('/tv/')) {
+        return trimmed.startsWith('http') ? trimmed : 'https://www.instagram.com' + (trimmed.startsWith('/') ? '' : '/') + trimmed;
+      }
     }
   }
-  // Priority 2: build from shortcode (but only if it looks real — not a mock hash)
-  const sc = post.shortcode || post.shortCode || '';
-  if (sc && sc.length > 0) {
-    return 'https://www.instagram.com/p/' + sc + '/';
+
+  // Priority 3: Fallback to full HTTP candidate URL
+  for (const c of candidates) {
+    if (c && typeof c === 'string' && c.trim() && c.trim().startsWith('http')) {
+      return c.trim();
+    }
   }
+
   return '#';
 }
 

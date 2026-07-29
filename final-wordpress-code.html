@@ -3350,22 +3350,26 @@ const SVG_CIRCUMFERENCE = 314.159; // 2 * Math.PI * 50
 
 // APP STATE
 function resolvePostUrl(post) {
-  if (!post) return &#x27;#&#x27;;
-  // Priority 1: explicit post_url or url field (already a full URL)
-  const candidates = [post.post_url, post.url, post.link];
+  if (!post) return '#';
+  const sc = post.shortcode || post.shortCode || post.code || '';
+  if (sc && typeof sc === 'string' && sc.trim() && sc.trim().length > 3) {
+    return 'https://www.instagram.com/p/' + sc.trim() + '/';
+  }
+  const candidates = [post.post_url, post.url, post.link, post.instagram_url];
   for (const c of candidates) {
-    if (c &amp;&amp; typeof c === &#x27;string&#x27; &amp;&amp; c.trim() &amp;&amp; c.trim().toLowerCase() !== &#x27;nan&#x27;) {
+    if (c && typeof c === 'string' && c.trim() && c.trim().toLowerCase() !== 'nan') {
       const trimmed = c.trim();
-      if (trimmed.startsWith(&#x27;http&#x27;)) return trimmed;
-      if (trimmed.startsWith(&#x27;/&#x27;)) return &#x27;https://www.instagram.com&#x27; + trimmed;
+      if (trimmed.includes('/p/') || trimmed.includes('/reel/') || trimmed.includes('/tv/')) {
+        return trimmed.startsWith('http') ? trimmed : 'https://www.instagram.com' + (trimmed.startsWith('/') ? '' : '/') + trimmed;
+      }
     }
   }
-  // Priority 2: build from shortcode (but only if it looks real — not a mock hash)
-  const sc = post.shortcode || post.shortCode || &#x27;&#x27;;
-  if (sc &amp;&amp; sc.length &gt; 0) {
-    return &#x27;https://www.instagram.com/p/&#x27; + sc + &#x27;/&#x27;;
+  for (const c of candidates) {
+    if (c && typeof c === 'string' && c.trim() && c.trim().startsWith('http')) {
+      return c.trim();
+    }
   }
-  return &#x27;#&#x27;;
+  return '#';
 }
 
 function fmtTrendDate(d) {

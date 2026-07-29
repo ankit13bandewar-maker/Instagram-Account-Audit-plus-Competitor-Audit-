@@ -422,7 +422,7 @@ def get_dynamic_competitors(target_handle: str) -> list:
     else:
         astro_pool = ["astroarunpandit", "adityakundli"] + ASTRO_CORE
 
-    sports_pool        = ["virat.kohli", "mahi7781", "rohitsharma45", "hardikpandya93", "neeraj____chopra", "smriti_mandhana"]
+    sports_pool        = ["espncricinfo", "bcci", "icc", "virat.kohli", "rohitsharma45", "mahi7781", "hardikpandya93"]
     entertainment_pool = ["shraddhakapoor", "priyankachopra", "aliaabhatt", "deepikapadukone", "iamsrk", "katrinakaif"]
     fashion_pool       = ["komalpandeyofficial", "thatbohogirl", "masabagupta", "aashnashroff", "siddharth93batra", "diipakhosla"]
     travel_pool        = ["anunaysood", "bruisedpassports", "tanyakhanijow", "shenaztreasury", "larissa_wlc", "aakanksha.monga"]
@@ -437,9 +437,9 @@ def get_dynamic_competitors(target_handle: str) -> list:
     if IS_ASTRO_NICHE:
         result = [c for c in astro_pool if c != th][:5]
         return _apply_astro_rule(result)
-    elif any(k in th for k in ["cric","virat","kohli","dhoni","rohit","sachin","sport","game","play","football","soccer","tennis","athlete"]):
+    elif any(k in th for k in ["starsport", "starsports", "espn", "cricket", "ipl", "bcci", "icc", "cric", "virat", "kohli", "dhoni", "rohit", "sachin", "sport", "game", "play", "football", "soccer", "tennis", "athlete"]):
         return [c for c in sports_pool if c != th][:5]
-    elif any(k in th for k in ["bolly","holly","actor","actress","cinema","movie","music","singer","star","celebrity","show","tv"]):
+    elif any(k in th for k in ["bolly", "holly", "actor", "actress", "cinema", "movie", "music", "singer", "star", "celebrity", "show", "tv"]):
         return [c for c in entertainment_pool if c != th][:5]
     elif any(k in th for k in ["fashion","beauty","makeup","style","wear","look","glam","dress"]):
         return [c for c in fashion_pool if c != th][:5]
@@ -513,11 +513,11 @@ def run_live_apify_competitor_audit(job_id: str, profile_url: str, date_from: st
                         post_url = f"https://www.instagram.com/p/{post_url}/"
                     break
             # Fallback: build URL from shortcode if available
-            if not post_url and p_shortcode:
-                post_url = f"https://www.instagram.com/p/{p_shortcode}/"
-            # Final fallback: link to profile page
-            if not post_url or post.get("is_mock"):
-                post_url = profile_url.rstrip('/')
+            if not post_url or ("instagram.com/p/" not in str(post_url) and "instagram.com/reel/" not in str(post_url)):
+                if p_shortcode:
+                    post_url = f"https://www.instagram.com/p/{p_shortcode}/"
+                elif not post_url:
+                    post_url = profile_url.rstrip('/')
 
             shares = max(0, int(post.get("sharesCount") if post.get("sharesCount") is not None else post.get("shares", 0)))
             saves = max(0, int(post.get("savesCount") if post.get("savesCount") is not None else post.get("saves", 0)))
