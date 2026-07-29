@@ -226,7 +226,19 @@ async function handleHistoryClick(username) {
 
   try {
     const res = await fetch(`${BACKEND_URL}/api/history/${encodeURIComponent(username)}/data`);
-    if (!res.ok) throw new Error(`Snapshot fetch failed with code ${res.status}`);
+    if (!res.ok) {
+      if (res.status === 404) {
+        // Fallback: If handle is not found in history DB, trigger dynamic dashboard audit query seamlessly
+        const auditRes = await fetch(`${BACKEND_URL}/api/dashboard-audit?target_username=${encodeURIComponent(username)}`);
+        if (!auditRes.ok) throw new Error(`Snapshot fetch failed with code ${auditRes.status}`);
+        const data = await auditRes.json();
+        await finishProgress();
+        await new Promise(resolve => setTimeout(resolve, 600));
+        displayDashboard(data);
+        return;
+      }
+      throw new Error(`Snapshot fetch failed with code ${res.status}`);
+    }
     const data = await res.json();
 
     await finishProgress();
