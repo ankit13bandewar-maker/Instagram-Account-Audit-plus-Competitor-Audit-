@@ -58,24 +58,30 @@ html_content = """<!DOCTYPE html>
 
     .pdf-page {
       width: 210mm;
-      min-height: 295mm;
-      padding: 16mm;
+      height: 297mm;
+      max-height: 297mm;
+      padding: 14mm 16mm;
       position: relative;
       background: #ffffff;
       overflow: hidden;
       page-break-after: always;
+      break-after: page;
       box-sizing: border-box;
+      margin: 0 !important;
     }
     
+    .pdf-page:first-child, .pdf-page:first-of-type {
+      page-break-before: avoid !important;
+      break-before: avoid !important;
+    }
+
     .pdf-page:last-of-type, .pdf-page:last-child {
       page-break-after: avoid !important;
       page-break-after: auto !important;
       break-after: avoid !important;
     }
-    
-    .glow-orb-1, .glow-orb-2 { display: none; }
 
-    .page-content { position: relative; z-index: 10; min-height: 263mm; display: flex; flex-direction: column; }
+    .page-content { position: relative; z-index: 10; height: 100%; display: flex; flex-direction: column; }
 
     h1, h2, h3, h4, .font-display {
       margin-top: 0;
@@ -584,9 +590,9 @@ html_content = """<!DOCTYPE html>
               margin:       0,
               filename:     `BloomX_Audit_${handle}.pdf`,
               image:        { type: 'jpeg', quality: 1.0 },
-              html2canvas:  { scale: 2.0, useCORS: true, allowTaint: true, logging: false },
+              html2canvas:  { scale: 2.0, useCORS: true, allowTaint: true, logging: false, scrollX: 0, scrollY: 0 },
               jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait', compress: true },
-              pagebreak:    { mode: ['css', 'legacy'] }
+              pagebreak:    { mode: ['css', 'legacy'], before: '.pdf-page:not(:first-child)' }
             };
 
             const allPages = wrapper.querySelectorAll('.pdf-page');
@@ -595,7 +601,6 @@ html_content = """<!DOCTYPE html>
               lastP.style.pageBreakAfter = 'avoid';
               lastP.style.breakAfter = 'avoid';
               lastP.style.marginBottom = '0';
-              lastP.style.minHeight = 'auto';
             }
 
             if (typeof html2pdf !== 'undefined') {
