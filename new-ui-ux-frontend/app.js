@@ -1,7 +1,21 @@
 // CONFIGURATION Constants
-const BACKEND_URL = (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1" || window.location.protocol === "file:")
-  ? "http://127.0.0.1:8000"
-  : "https://client-audit-tool.onrender.com";
+const BACKEND_URL = (function() {
+  if (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1" || window.location.protocol === "file:") {
+    const host = window.location.hostname || "127.0.0.1";
+    return window.location.protocol === "file:" ? "http://127.0.0.1:8000" : `${window.location.protocol}//${host}:8000`;
+  }
+  try {
+    const parentHost = window.parent.location.hostname;
+    const parentProtocol = window.parent.location.protocol;
+    if (parentHost === "localhost" || parentHost === "127.0.0.1" || parentProtocol === "file:") {
+      const host = parentHost || "127.0.0.1";
+      return parentProtocol === "file:" ? "http://127.0.0.1:8000" : `${parentProtocol}//${host}:8000`;
+    }
+  } catch (e) {
+    // Ignore cross-origin errors
+  }
+  return "https://client-audit-tool.onrender.com";
+})();
 const SVG_CIRCUMFERENCE = 314.159; // 2 * Math.PI * 50
 
 // APP STATE
@@ -104,18 +118,30 @@ function init() {
     searchForm.addEventListener('submit', handleSearchSubmit);
   }
 
-  // Mobile sidebar toggle handler
+  const demoBtn = document.getElementById('demo-btn');
+  if (demoBtn) {
+    demoBtn.addEventListener('click', function() {
+      handleHistoryClick('starsportsindia');
+    });
+  }
+
+  // Drawer toggle handler
   const toggleBtn = document.getElementById('sidebar-toggle');
   const sidebar = document.querySelector('.sidebar');
+  const backdrop = document.getElementById('drawer-backdrop');
+
   if (toggleBtn && sidebar) {
     toggleBtn.addEventListener('click', (e) => {
       e.stopPropagation();
       sidebar.classList.toggle('active');
+      if (backdrop) backdrop.classList.toggle('active');
     });
-    // Close sidebar when clicking outside on mobile
+
+    // Close drawer when clicking outside or on backdrop
     document.addEventListener('click', (e) => {
-      if (sidebar.classList.contains('active') && !sidebar.contains(e.target) && e.target !== toggleBtn) {
+      if (sidebar.classList.contains('active') && !sidebar.contains(e.target) && !toggleBtn.contains(e.target)) {
         sidebar.classList.remove('active');
+        if (backdrop) backdrop.classList.remove('active');
       }
     });
   }
@@ -224,6 +250,10 @@ async function handleSearchSubmit(e) {
   e.preventDefault();
   const profileUrl = profileUrlInput.value.trim();
   if (!profileUrl || state.loading) return;
+
+  if (profileUrl.toLowerCase() === 'demo' || profileUrl.toLowerCase() === 'test') {
+    return handleHistoryClick('starsportsindia');
+  }
 
   setLoadingState(true);
   startProgress();
@@ -390,13 +420,24 @@ function displayDashboard(rawData) {
 
   state.activeProfile = data.profile_url || profileUrlInput.value.trim();
   state.selectedPost = null; // Reset selection on new load
+  state.allPosts = data.posts || []; // Store for PDF generator
+
+  // Save active audit data to sessionStorage and localStorage for instant PDF generation
+  try {
+    const rawJson = JSON.stringify(rawData);
+    sessionStorage.setItem('last_audit_data', rawJson);
+    const handleStr = (state.activeProfile || "").split('?')[0].replace(/\/$/, '').split('/').pop().replace('@', '').toLowerCase();
+    if (handleStr) {
+      localStorage.setItem('audit_data_' + handleStr, rawJson);
+    }
+  } catch (e) {}
 
   // Hide placeholder/loader and show dashboard wrapper
   if (emptyState) emptyState.classList.add('hidden');
   if (loaderState) loaderState.classList.add('hidden');
   if (dashboardState) dashboardState.classList.remove('hidden');
 
-  // 1. Ingest Hero Meta Panel
+  // 1. Ingest Hero Meta Panel & PDF Cover Metadata
   const handle = getProfileHandle(state.activeProfile);
 
   // Update browser document title
@@ -407,13 +448,30 @@ function displayDashboard(rawData) {
     el.textContent = handle;
   });
 
+  // Populate PDF Cover & Executive Summary Meta
+  const coverHandleEl = document.getElementById('pdf-cover-handle');
+  if (coverHandleEl) coverHandleEl.textContent = handle;
+
+  const execHandleEl = document.getElementById('pdf-exec-handle');
+  if (execHandleEl) execHandleEl.textContent = handle;
+
+  const dateFrom = document.getElementById('date-from')?.value;
+  const dateTo = document.getElementById('date-to')?.value;
+  const periodText = (dateFrom && dateTo) ? `${fmtTrendDate(dateFrom)} – ${fmtTrendDate(dateTo)}` : 'Last 15 posts';
+  const coverPeriodEl = document.getElementById('pdf-cover-period');
+  if (coverPeriodEl) coverPeriodEl.textContent = periodText;
+
+  const todayStr = new Date().toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric' });
+  const coverDateEl = document.getElementById('pdf-cover-date');
+  if (coverDateEl) coverDateEl.textContent = todayStr;
+
   const initialsElement = document.getElementById('profile-initials');
   if (initialsElement) {
     initialsElement.textContent = handle.substring(1, 3).toUpperCase();
   }
 
   const linkElement = document.getElementById('profile-link');
-  if (linkElement) {
+    if (linkElement) {
     linkElement.href = state.activeProfile;
   }
 
@@ -426,15 +484,15 @@ function displayDashboard(rawData) {
   const totalLikes = postsCount > 0 ? data.posts.reduce((sum, p) => sum + (p.likes || 0), 0) : 0;
   const statTotalLikesEl = document.getElementById('stat-total-likes');
   if (statTotalLikesEl) {
-    statTotalLikesEl.dataset.val = totalLikes;
-    statTotalLikesEl.textContent = totalLikes.toLocaleString();
+    statTotalLikesEl.dataset.val = isNaN(totalLikes) ? '0' : totalLikes;
+    if(typeof countUp === 'function') countUp(statTotalLikesEl);
   }
 
   const totalComments = postsCount > 0 ? data.posts.reduce((sum, p) => sum + (p.comments || 0), 0) : 0;
   const statTotalCommentsEl = document.getElementById('stat-total-comments');
   if (statTotalCommentsEl) {
     statTotalCommentsEl.dataset.val = totalComments;
-    statTotalCommentsEl.textContent = totalComments.toLocaleString();
+    if(typeof countUp === 'function') countUp(statTotalCommentsEl);
   }
 
   const followersVal = data.follower_count || clientStats.total_followers || 0;
@@ -446,7 +504,7 @@ function displayDashboard(rawData) {
         ? (followersVal / 1000).toFixed(1).replace(/\.0$/, '') + 'k' 
         : String(followersVal);
     statTotalFollowersEl.dataset.val = followersFormatted;
-    statTotalFollowersEl.textContent = followersFormatted;
+    if(typeof countUp === 'function') countUp(statTotalFollowersEl);
   }
 
   // 2. Ingest KPI Cards
@@ -454,7 +512,7 @@ function displayDashboard(rawData) {
   const erEl = document.getElementById('kpi-er');
   if (erEl) {
     erEl.dataset.val = erVal;
-    erEl.textContent = erVal;
+    if(typeof countUp === 'function') countUp(erEl);
 
     // Dynamically adjust first KPI card colors (good/warn/neg)
     const erCard = document.getElementById('kpi-er-card');
@@ -467,7 +525,7 @@ function displayDashboard(rawData) {
   const inactiveEl = document.getElementById('kpi-inactive');
   if (inactiveEl) {
     inactiveEl.dataset.val = inactiveVal;
-    inactiveEl.textContent = inactiveVal;
+    if(typeof countUp === 'function') countUp(inactiveEl);
 
     const inactiveCard = document.getElementById('kpi-inactive-card');
     if (inactiveCard) {
@@ -480,12 +538,55 @@ function displayDashboard(rawData) {
   const authEl = document.getElementById('kpi-authenticity');
   if (authEl) {
     authEl.dataset.val = authenticityScoreRounded;
-    authEl.textContent = authenticityScoreRounded;
+    if(typeof countUp === 'function') countUp(authEl);
 
     const authCard = document.getElementById('kpi-authenticity-card');
     if (authCard) {
       authCard.className = 'card metric ' + (authenticityScoreRounded >= 80 ? 'pos' : authenticityScoreRounded >= 60 ? 'warnv' : 'good');
     }
+  }
+
+  // Populate Executive Summary Takeaways
+  const execBulletsEl = document.getElementById('pdf-exec-bullets');
+  if (execBulletsEl) {
+    const perfSplit = data.performance_split || {};
+    const reelsLikes = Math.round(perfSplit.reels?.average_likes || 0);
+    const staticLikes = Math.round(perfSplit.static?.average_likes || 0);
+    const topFormatText = reelsLikes >= staticLikes
+      ? `Reels lead content engagement with an average of ${reelsLikes.toLocaleString()} likes per post vs ${staticLikes.toLocaleString()} on static posts.`
+      : `Static posts lead content engagement with an average of ${staticLikes.toLocaleString()} likes per post vs ${reelsLikes.toLocaleString()} on Reels.`;
+
+    const erTierText = erVal >= 3.5
+      ? `High Engagement Tier (${erVal}%), outperforming baseline benchmarks for accounts of similar scale.`
+      : erVal >= 2.0
+      ? `Moderate Engagement Tier (${erVal}%), maintaining healthy baseline interaction.`
+      : `Opportunity Tier (${erVal}%), indicating potential for audience engagement optimization.`;
+
+    const authText = `Audience authenticity score is ${authenticityScoreRounded}% with ${inactiveVal}% inactive or bot accounts detected.`;
+
+    execBulletsEl.innerHTML = `
+      <div class="pdf-exec-bullet-card">
+        <div class="pdf-exec-icon">📈</div>
+        <div class="pdf-exec-text">
+          <h4>Engagement Performance</h4>
+          <p>${erTierText}</p>
+        </div>
+      </div>
+      <div class="pdf-exec-bullet-card">
+        <div class="pdf-exec-icon">🎬</div>
+        <div class="pdf-exec-text">
+          <h4>Top Content Format</h4>
+          <p>${topFormatText}</p>
+        </div>
+      </div>
+      <div class="pdf-exec-bullet-card">
+        <div class="pdf-exec-icon">👥</div>
+        <div class="pdf-exec-text">
+          <h4>Audience Authenticity</h4>
+          <p>${authText}</p>
+        </div>
+      </div>
+    `;
   }
 
   // Convert days_per_post into posts_per_day, calculating dynamically to protect against old cache payloads
@@ -524,7 +625,7 @@ function displayDashboard(rawData) {
   const velocityEl = document.getElementById('kpi-velocity');
   if (velocityEl) {
     velocityEl.dataset.val = formattedVelocity;
-    velocityEl.textContent = formattedVelocity;
+    if(typeof countUp === 'function') countUp(velocityEl);
   }
 
   // 3. Render SVG Charts
@@ -699,7 +800,15 @@ function renderAllDynamicCharts(rawData) {
   // --- Chart 2: Reels Views Distribution ---
   const reelsPts = reelsViews.length > 0 ? reelsViews.map(item => item.views) : [0, 0, 0, 0];
   const reelsLabels = reelsViews.length > 0 ? reelsViews.map(item => item.date) : ["Wk 1", "Wk 2", "Wk 3", "Wk 4"];
-  drawChart('chart-reels', reelsPts, 'var(--acc2)', 148, reelsLabels);
+  if (document.getElementById('chart-reels')) {
+    drawChart('chart-reels', reelsPts, 'var(--acc2)', 148, reelsLabels);
+  }
+  const trvEl = document.getElementById('stat-total-reels-views');
+  if (trvEl) {
+    const sum = reelsPts.reduce((a, b) => a + (isNaN(b) ? 0 : b), 0);
+    trvEl.dataset.val = isNaN(sum) ? '0' : sum >= 1000000 ? (sum/1000000).toFixed(1).replace(/\.0$/,'')+'M' : sum >= 1000 ? (sum/1000).toFixed(1).replace(/\.0$/,'')+'k' : sum.toString();
+    if(typeof countUp === 'function') countUp(trvEl);
+  }
 
   const reelsAxis = document.getElementById('reels-axis-x');
   if (reelsAxis && reelsViews.length > 0) {
@@ -713,9 +822,17 @@ function renderAllDynamicCharts(rawData) {
   }
 
   // --- Chart 3: Reach Performance Distribution ---
-  const reachPts = reachDistribution.length > 0 ? reachDistribution.map(item => item.views) : [0, 0, 0, 0];
+  const reachPts = reachDistribution.length > 0 ? reachDistribution.map(item => item.reach) : [0, 0, 0, 0];
   const reachLabels = reachDistribution.length > 0 ? reachDistribution.map(item => item.date) : ["Wk 1", "Wk 2", "Wk 3", "Wk 4"];
-  drawChart('chart-reach', reachPts, 'var(--acc2)', 148, reachLabels);
+  if (document.getElementById('chart-reach')) {
+    drawChart('chart-reach', reachPts, 'var(--acc2)', 148, reachLabels);
+  }
+  const tprEl = document.getElementById('stat-total-posts-reach');
+  if (tprEl) {
+    const sum = reachPts.reduce((a, b) => a + (isNaN(b) ? 0 : b), 0);
+    tprEl.dataset.val = isNaN(sum) ? '0' : sum >= 1000000 ? (sum/1000000).toFixed(1).replace(/\.0$/,'')+'M' : sum >= 1000 ? (sum/1000).toFixed(1).replace(/\.0$/,'')+'k' : sum.toString();
+    if(typeof countUp === 'function') countUp(tprEl);
+  }
 
   const reachAxis = document.getElementById('reach-axis-x');
   if (reachAxis && reachDistribution.length > 0) {
@@ -748,7 +865,7 @@ function renderFormatPerformanceBattle(data) {
   const reelsAvgLikes = document.getElementById('reels-avg-likes');
   if (reelsAvgLikes) {
     reelsAvgLikes.dataset.val = reelsLikes;
-    reelsAvgLikes.textContent = Math.round(reelsLikes).toLocaleString();
+    if(typeof countUp === 'function') countUp(reelsAvgLikes);
   }
 
   const reelsAvgComments = document.getElementById('reels-avg-comments');
@@ -765,7 +882,7 @@ function renderFormatPerformanceBattle(data) {
   const staticAvgLikes = document.getElementById('static-avg-likes');
   if (staticAvgLikes) {
     staticAvgLikes.dataset.val = staticLikes;
-    staticAvgLikes.textContent = Math.round(staticLikes).toLocaleString();
+    if(typeof countUp === 'function') countUp(staticAvgLikes);
   }
 
   const staticAvgComments = document.getElementById('static-avg-comments');
@@ -800,7 +917,7 @@ function renderFormatPerformanceBattle(data) {
               </svg>
             </span>
           </span>
-          <span class="likes"><span style="color: var(--neg);">❤</span> ${post.likes.toLocaleString()} &nbsp;💬 ${(post.comments || 0).toLocaleString()}</span>
+          <span class="likes"><span style="color: var(--neg);">❤</span> LIKE ${post.likes.toLocaleString()} &nbsp;💬 COMMENT ${(post.comments || 0).toLocaleString()}</span>
         </a>
       `).join('');
     }
@@ -825,11 +942,57 @@ function renderFormatPerformanceBattle(data) {
               </svg>
             </span>
           </span>
-          <span class="likes"><span style="color: var(--neg);">❤</span> ${post.likes.toLocaleString()} &nbsp;💬 ${(post.comments || 0).toLocaleString()}</span>
+          <span class="likes"><span style="color: var(--neg);">❤</span> LIKE ${post.likes.toLocaleString()} &nbsp;💬 COMMENT ${(post.comments || 0).toLocaleString()}</span>
         </a>
       `).join('');
     }
   }
+
+  // Handle empty state for zero reels or zero static posts
+  const handleEmpty = (type, count, selectors, keepClasses = []) => {
+    const dateStr = new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+    const msgHtml = `<div class="empty-data-msg" style="color: var(--neg); font-weight: 600; padding: 20px 0; text-align: center; width: 100%;">No ${type === 'reels' ? 'reels' : 'post'} till date - ${dateStr}</div>`;
+    
+    selectors.forEach(sel => {
+      let container = document.getElementById(sel);
+      if(!container) {
+        if (sel === 'reels-medians') container = document.getElementById('reels-median-plays')?.closest('.grid.g2');
+        if (sel === 'static-medians') container = document.getElementById('static-median-likes')?.closest('.grid.g2');
+      }
+      if (!container) return;
+      
+      let emptyMsg = container.querySelector('.empty-data-msg');
+      if (count === 0) {
+        Array.from(container.children).forEach(child => {
+          if (!child.classList.contains('empty-data-msg') && !keepClasses.some(c => child.classList.contains(c))) {
+            child.dataset.oldDisplay = child.style.display || '';
+            child.style.display = 'none';
+          }
+        });
+        if (!emptyMsg) {
+          container.insertAdjacentHTML('beforeend', msgHtml);
+        } else {
+          emptyMsg.style.display = 'block';
+        }
+      } else {
+        Array.from(container.children).forEach(child => {
+          if (!child.classList.contains('empty-data-msg') && !keepClasses.some(c => child.classList.contains(c))) {
+            if (child.dataset.oldDisplay !== undefined) {
+              child.style.display = child.dataset.oldDisplay;
+            } else {
+              child.style.display = '';
+            }
+          }
+        });
+        if (emptyMsg) {
+          emptyMsg.style.display = 'none';
+        }
+      }
+    });
+  };
+
+  handleEmpty('reels', reelsCount, ['reels-col', 'reels-medians', 'reels-feed-card', 'best-reel-row'], ['bs-header', 'card-h']);
+  handleEmpty('static', staticCount, ['static-col', 'static-medians', 'static-feed-card', 'best-static-row'], ['bs-header', 'card-h']);
 }
 
 // ─── RENDERING FOR NICHE BENCHMARK ───
@@ -866,9 +1029,13 @@ function renderNicheBenchmark(data) {
   // Positioning the pin (gauge left %)
   const pin = document.getElementById('gauge-pin');
   if (pin) {
-    const indexScore = benchmark.index_score || 0;
-    // Map 0 - 200% index score to 5% - 95% visual width of track
-    const percentage = Math.max(5, Math.min(95, (indexScore / 200) * 100));
+    const verdict = (benchmark.verdict || '').toLowerCase();
+    let percentage = 50; // Default center
+    if (verdict.includes('low')) percentage = 12.5; 
+    else if (verdict.includes('average')) percentage = 37.5; 
+    else if (verdict.includes('high')) percentage = 62.5; 
+    else if (verdict.includes('exceptional')) percentage = 87.5; 
+    
     pin.style.left = `${percentage}%`;
   }
 }
@@ -942,26 +1109,26 @@ function renderMedianMetricsAndBestWorst(data) {
   const medianLikesEl = document.getElementById('median-likes-value');
   if (medianLikesEl) {
     medianLikesEl.dataset.val = medianLikes;
-    medianLikesEl.textContent = medianLikes.toLocaleString();
+    if(typeof countUp === 'function') countUp(medianLikesEl);
   }
   
   const rmlEl = document.getElementById('reels-median-likes');
-  if (rmlEl) { rmlEl.dataset.val = reelsMedianLikes; rmlEl.textContent = reelsMedianLikes.toLocaleString(); }
+  if (rmlEl) { rmlEl.dataset.val = reelsMedianLikes; if(typeof countUp === 'function') countUp(rmlEl); }
   const rmcEl = document.getElementById('reels-median-comments');
-  if (rmcEl) { rmcEl.dataset.val = reelsMedianComments; rmcEl.textContent = reelsMedianComments.toLocaleString(); }
+  if (rmcEl) { rmcEl.dataset.val = reelsMedianComments; if(typeof countUp === 'function') countUp(rmcEl); }
   const smlEl = document.getElementById('static-median-likes');
-  if (smlEl) { smlEl.dataset.val = staticMedianLikes; smlEl.textContent = staticMedianLikes.toLocaleString(); }
+  if (smlEl) { smlEl.dataset.val = staticMedianLikes; if(typeof countUp === 'function') countUp(smlEl); }
   const smcEl = document.getElementById('static-median-comments');
-  if (smcEl) { smcEl.dataset.val = staticMedianComments; smcEl.textContent = staticMedianComments.toLocaleString(); }
+  if (smcEl) { smcEl.dataset.val = staticMedianComments; if(typeof countUp === 'function') countUp(smcEl); }
   const medianCommentsEl = document.getElementById('median-comments-value');
   if (medianCommentsEl) {
     medianCommentsEl.dataset.val = medianComments;
-    medianCommentsEl.textContent = medianComments.toLocaleString();
+    if(typeof countUp === 'function') countUp(medianCommentsEl);
   }
   const averageLikesEl = document.getElementById('average-likes-value');
   if (averageLikesEl) {
     averageLikesEl.dataset.val = averageLikes;
-    averageLikesEl.textContent = averageLikes.toLocaleString();
+    if(typeof countUp === 'function') countUp(averageLikesEl);
   }
   const activeDayEl = document.getElementById('most-active-day-value');
   if (activeDayEl) activeDayEl.textContent = dayWithMostPosts;
@@ -993,7 +1160,7 @@ function renderMedianMetricsAndBestWorst(data) {
   }
 
   const worstStatsEl = document.getElementById('worst-post-stats');
-  if (worstStatsEl) worstStatsEl.textContent = `${(worstPost.likes || 0).toLocaleString()} likes · ${(worstPost.comments || 0).toLocaleString()} comments`;
+  if (worstStatsEl) worstStatsEl.textContent = `${Math.max(0, worstPost.likes || 0).toLocaleString()} likes · ${Math.max(0, worstPost.comments || 0).toLocaleString()} comments`;
 
   const worstLinkEl = document.getElementById('worst-post-link');
   if (worstLinkEl) {
@@ -1139,26 +1306,34 @@ function _renderFeedList(feedId, viewerId, posts, medianLikes, stateKey) {
     const postIcon = isVideo
       ? `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>`
       : `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>`;
+    
+    const itemStyle = isWin 
+      ? 'border: 1px solid rgba(13, 148, 136, 0.25); border-left: 4px solid #0D9488; background: linear-gradient(135deg, #F0FDF4 0%, #CCFBF1 100%);' 
+      : 'border: 1px solid rgba(217, 119, 6, 0.25); border-left: 4px solid #D97706; background: linear-gradient(135deg, #FFFBEB 0%, #FEF3C7 100%);';
+
+    const winBadgeHtml = isWin 
+      ? '<span style="color:#0F766E;font-weight:800;font-size:10px;margin-left:6px;padding:2px 8px;border-radius:6px;background:#99F6E4;border:1px solid rgba(13,148,136,0.3);letter-spacing:0.5px;">WIN</span>' 
+      : '<span style="color:#B45309;font-weight:800;font-size:10px;margin-left:6px;padding:2px 8px;border-radius:6px;background:#FDE68A;border:1px solid rgba(217,119,6,0.3);letter-spacing:0.5px;">FIX</span>';
+
+    const likesColor = isWin ? '#0F766E' : '#B45309';
 
     const inlineAnalysisHtml = isSelected ? getPostDeepDiveHtml(post) : '';
 
     return `
-      <div class="feed-item-group" style="margin-bottom: 6px;">
-        <div class="${activeClass}" data-post-index="${post.index}">
+      <div class="feed-item-group" style="margin-bottom: 8px;">
+        <div class="${activeClass}" data-post-index="${post.index}" style="${itemStyle} border-radius: 12px; padding: 12px 16px; transition: all 0.2s ease;">
           <div class="feed-rank">${i + 1}</div>
-          <div class="feed-thumb">${postIcon}</div>
+          <div class="feed-thumb" style="color: ${likesColor};">${postIcon}</div>
           <div class="feed-body">
             <div class="ttl">
               ${post.index} 
-              ${isWin 
-                ? '<span style="color:var(--accent);font-weight:800;font-size:10px;margin-left:6px;padding:2px 6px;border-radius:4px;background:rgba(198,255,58,0.1);">WIN</span>' 
-                : '<span style="color:var(--neg);font-weight:800;font-size:10px;margin-left:6px;padding:2px 6px;border-radius:4px;background:rgba(255,99,99,0.1);">FIX</span>'}
+              ${winBadgeHtml}
               <span style="color:var(--faint);font-weight:500;font-size:11px;margin-left:4px;">· ${fmtTrendDate(post.date)}</span>
             </div>
             <div class="cap">${cleanSnippet}</div>
           </div>
-          <div class="feed-likes">
-            <span style="color: var(--neg);">❤</span> ${(post.likes || 0).toLocaleString()}
+          <div class="feed-likes" style="font-weight:700; color:${likesColor};">
+            <span style="color: ${isWin ? '#10B981' : '#EF4444'};">❤</span> LIKE ${(post.likes || 0).toLocaleString()}
             <a href="${resolvePostUrl(post)}" target="_blank" rel="noopener noreferrer" style="color:var(--accent);text-decoration:none;margin-left:8px;" title="View Live Post" onclick="event.stopPropagation()">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="display:inline-block;vertical-align:middle;">
                 <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
@@ -1287,76 +1462,77 @@ function renderCompetitors(competitors, clientFollowers = 0) {
   }
 
   let cardsHtml = '';
-  validCompetitors.forEach(comp => {
+  validCompetitors.forEach((comp, index) => {
     const handleName = comp.competitor_name;
     const cleanHandle = handleName.replace(/[^a-zA-Z0-9_.]/g, '');
     const followersFormatted = comp.follower_count.toLocaleString();
     const er = comp.metrics?.engagement_rate ?? 0;
     const barWidth = Math.min(er * 10, 100);
-    const velocity = comp.metrics?.days_per_post ?? 0;
     const ghostPct = comp.metrics?.inactive_follower_percentage ?? 0;
-    const realPct = (100 - ghostPct).toFixed(1);
 
     const bestLikes = comp.metrics?.best_post?.likes ?? 0;
-    const worstLikes = comp.metrics?.worst_post?.likes ?? 0;
+    const worstLikes = Math.max(0, comp.metrics?.worst_post?.likes ?? 0);
 
     cardsHtml += `
-      <div class="competitor-card">
+      <div class="competitor-card" style="border: 1px solid rgba(79, 70, 229, 0.2); border-left: 4px solid #4F46E5; border-radius: 14px; padding: 20px; background: linear-gradient(135deg, #FAF5FF 0%, #EEF2FF 100%); box-shadow: 0 4px 14px rgba(79, 70, 229, 0.06);">
         <div class="competitor-card-header">
           <div class="comp-rank-group">
-            <span class="comp-rank-badge">#${comp.rank}</span>
-            <a href="https://www.instagram.com/${cleanHandle}" target="_blank" rel="noopener noreferrer" class="comp-username" style="color:inherit; text-decoration:none; display:flex; align-items:center; gap:6px; cursor:pointer; position:relative; z-index:10;" title="View Instagram Profile">
+            <span class="comp-rank-badge" style="background: #4F46E5; color: #FFFFFF; font-weight: 800; border: none; padding: 4px 10px; border-radius: 6px;">#${comp.rank}</span>
+            <a href="https://www.instagram.com/${cleanHandle}" target="_blank" rel="noopener noreferrer" class="comp-username" style="color:#111827; font-weight: 700; text-decoration:none; display:flex; align-items:center; gap:6px; cursor:pointer; position:relative; z-index:10;" title="View Instagram Profile">
               ${handleName}
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="opacity:0.7"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#4F46E5" stroke-width="2.5" style="opacity:0.9"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
             </a>
           </div>
         </div>
-        <div class="competitor-card-body">
+        <div class="competitor-card-body" style="display: flex; flex-direction: column; gap: 14px; margin-top: 12px;">
           
           <!-- Strict ER -->
           <div class="comp-er-row">
-            <div class="comp-er-header">
-              <span>Strict ER</span>
-              <span class="comp-er-val">${er}%</span>
+            <div class="comp-er-header" style="display: flex; justify-content: space-between; font-size: 12px; color: #4B5563;">
+              <span style="font-weight: 600;">Strict ER</span>
+              <span class="comp-er-val" style="color: #4F46E5; font-weight: 800;">${er}%</span>
             </div>
-            <div class="comp-bar-track">
-              <div class="comp-bar-fill" style="width: ${barWidth}%"></div>
+            <div class="comp-bar-track" style="height: 6px; background: #E0E7FF; border-radius: 3px; overflow: hidden; margin-top: 4px;">
+              <div class="comp-bar-fill" style="width: ${barWidth}%; background: #4F46E5; height: 100%;"></div>
             </div>
           </div>
 
           <!-- Stats Grid -->
           <div class="comp-stats-grid">
-            <div class="comp-stat-box">
-              <div class="comp-stat-box-title">
+            <div class="comp-stat-box" style="background: linear-gradient(135deg, #EEF2FF 0%, #E0E7FF 100%); border: 1px solid rgba(99, 102, 241, 0.2); border-radius: 10px; padding: 12px 14px;">
+              <div class="comp-stat-box-title" style="font-size: 11px; font-weight: 700; color: #4338CA; text-transform: uppercase; letter-spacing: 0.5px;">
                 <span>Followers</span>
               </div>
-              <span class="comp-stat-box-val">${followersFormatted}</span>
+              <span class="comp-stat-box-val" style="font-size: 18px; font-weight: 800; color: #1E1B4B; margin-top: 2px; display: block;">${followersFormatted}</span>
             </div>
-
           </div>
 
           <!-- Ghost Followers -->
-          <div class="comp-ghost-box">
-            <span class="comp-ghost-title">Inactive Followers</span>
-            <span class="comp-ghost-val">${ghostPct}%</span>
+          <div class="comp-ghost-box" style="background: linear-gradient(135deg, #FFFBEB 0%, #FEF3C7 100%); border: 1px solid rgba(245, 158, 11, 0.25); border-radius: 10px; padding: 10px 14px; display: flex; justify-content: space-between; align-items: center;">
+            <span class="comp-ghost-title" style="font-size: 12px; font-weight: 600; color: #78350F;">Inactive Followers</span>
+            <span class="comp-ghost-val" style="font-size: 13px; font-weight: 800; color: #B91C1C;">${ghostPct}%</span>
           </div>
 
           <!-- Post Highlights -->
-          <div class="comp-highlights">
+          <div class="comp-highlights" style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; border-top: 1px solid #E5E7EB; padding-top: 12px;">
             <div>
-              <span class="comp-highlight-title">Best Post</span>
-              <a href="${resolvePostUrl(comp.metrics?.best_post)}" target="_blank" rel="noopener noreferrer" class="comp-highlight-btn best" style="position: relative;">
-                <svg style="position: absolute; top: 6px; right: 6px; width: 10px; height: 10px; color: currentColor; opacity: 0.5;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
-                <span>${bestLikes.toLocaleString()}</span>
-                <div style="font-size: 7px; text-transform: uppercase; font-weight:700; margin-top:2px;">Likes</div>
+              <span class="comp-highlight-title" style="font-size: 11px; font-weight: 700; color: #6B7280; text-transform: uppercase; margin-bottom: 4px; display: block;">Best Post</span>
+              <a href="${resolvePostUrl(comp.metrics?.best_post)}" target="_blank" rel="noopener noreferrer" class="comp-highlight-btn best" style="display: flex; flex-direction: column; align-items: center; justify-content: center; background: linear-gradient(135deg, #F0FDF4 0%, #CCFBF1 100%); border: 1px solid rgba(13, 148, 136, 0.3); border-radius: 8px; padding: 8px 4px; color: #0F766E; text-decoration: none;">
+                <span style="font-weight: 800; font-size: 13px; display: inline-flex; align-items: center; gap: 4px;">
+                  ${bestLikes.toLocaleString()}
+                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="flex-shrink: 0; opacity: 0.85;"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+                </span>
+                <div style="font-size: 8px; text-transform: uppercase; font-weight: 700; margin-top: 1px;">Likes</div>
               </a>
             </div>
             <div>
-              <span class="comp-highlight-title">Worst Post</span>
-              <a href="${resolvePostUrl(comp.metrics?.worst_post)}" target="_blank" rel="noopener noreferrer" class="comp-highlight-btn worst" style="position: relative;">
-                <svg style="position: absolute; top: 6px; right: 6px; width: 10px; height: 10px; color: currentColor; opacity: 0.5;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
-                <span>${worstLikes.toLocaleString()}</span>
-                <div style="font-size: 7px; text-transform: uppercase; font-weight:700; margin-top:2px;">Likes</div>
+              <span class="comp-highlight-title" style="font-size: 11px; font-weight: 700; color: #6B7280; text-transform: uppercase; margin-bottom: 4px; display: block;">Worst Post</span>
+              <a href="${resolvePostUrl(comp.metrics?.worst_post)}" target="_blank" rel="noopener noreferrer" class="comp-highlight-btn worst" style="display: flex; flex-direction: column; align-items: center; justify-content: center; background: linear-gradient(135deg, #FFFBEB 0%, #FEF3C7 100%); border: 1px solid rgba(217, 119, 6, 0.3); border-radius: 8px; padding: 8px 4px; color: #B45309; text-decoration: none;">
+                <span style="font-weight: 800; font-size: 13px; display: inline-flex; align-items: center; gap: 4px;">
+                  ${worstLikes.toLocaleString()}
+                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="flex-shrink: 0; opacity: 0.85;"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+                </span>
+                <div style="font-size: 8px; text-transform: uppercase; font-weight: 700; margin-top: 1px;">Likes</div>
               </a>
             </div>
           </div>
@@ -1622,48 +1798,60 @@ function getProfileHandle(url) {
   }
 }
 
-function getDisplayUrl(url) {
-  if (!url || url === '#') return 'No URL available';
-  try {
-    const parsed = new URL(url);
-    return parsed.hostname + parsed.pathname;
-  } catch {
-    return url;
-  }
-}
-
-// Simple Markdown-to-HTML parser
 function parseMarkdown(mdText) {
   if (!mdText) return '';
   let html = mdText;
 
-  // 1. Convert uppercase titles with emojis
+  // Normalize line endings
+  html = html.replace(/\r\n/g, '\n');
+
+  // 1. Specific AI Output Headers
+  html = html.replace(/(?:[\u{1F534}\u{1F7E2}\u{1F4A1}\u{1F4DD}\u{1F4C8}\u{1F4C9}\u{1F6A8}\u{26A0}])?\s*(?:\*\*)?PERFORMANCE (DIAGNOSTIC|SNAPSHOT)(?:\*\*)?(?:\n|$)/giu, (match, p1) => {
+    return `<h4 style="margin-top:24px;margin-bottom:12px;font-weight:800;letter-spacing:0.04em;color:var(--warn);display:flex;align-items:center;text-transform:uppercase;font-size:16px;"><svg style="margin-right: 6px; width: 16px; height: 16px; stroke: var(--warn); stroke-width: 2px; fill: none; flex-shrink: 0;" viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>PERFORMANCE ${p1.toUpperCase()}</h4>\n`;
+  });
+
+  html = html.replace(/(?:[\u{2726}\u{2728}])?\s*(?:\*\*)?Action Plan:?(?:\*\*)?(?:\n|$)/giu, () => {
+    return `<h4 style="margin-top:20px;margin-bottom:12px;font-weight:800;letter-spacing:0.04em;color:var(--accent);display:flex;align-items:center;text-transform:uppercase;font-size:16px;"><svg style="margin-right: 6px; width: 16px; height: 16px; stroke: var(--accent); stroke-width: 1.5px; fill: none; flex-shrink: 0;" viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/></svg>ACTION PLAN</h4>\n`;
+  });
+
+  html = html.replace(/(?:[\u{2726}\u{25EF}\u{2705}\u{274C}])?\s*(?:\*\*)?Why it (failed|worked):?(?:\*\*)?(?:\n|$)/giu, (match, p1) => {
+    return `<h4 style="margin-top:20px;margin-bottom:12px;font-weight:800;letter-spacing:0.04em;color:var(--pos);display:flex;align-items:center;text-transform:uppercase;font-size:16px;"><svg style="margin-right: 6px; width: 16px; height: 16px; stroke: var(--pos); stroke-width: 1.5px; fill: none; flex-shrink: 0;" viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>WHY IT ${p1.toUpperCase()}</h4>\n`;
+  });
+
   html = html.replace(/^(?:### )?([\u{1F300}-\u{1F9FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}])?\s*([A-Z0-9\s_&]+)\s*(?:\n|$)/gmu, (match, emoji, text) => {
     if (!text || text.trim().length < 3) return match;
     const cleanedText = text.trim();
     const isWarn = cleanedText.includes("FRICTION") || cleanedText.includes("AVOID") || cleanedText.includes("DROP");
     const colorVar = isWarn ? 'var(--warn)' : 'var(--accent)';
-    const emojiStr = emoji ? `<span style="margin-right: 8px; font-size: 1.1em;">${emoji}</span>` : '';
-    return `<h4 style="margin-top:24px;margin-bottom:12px;font-weight:800;letter-spacing:0.04em;color:${colorVar};display:flex;align-items:center;text-transform:uppercase;font-size:13px;">${emojiStr}${cleanedText}</h4>`;
+    const emojiStr = emoji ? `<span style="margin-right: 6px; font-size: 1.1em;">${emoji}</span>` : '';
+    return `<h4 style="margin-top:24px;margin-bottom:12px;font-weight:800;letter-spacing:0.04em;color:${colorVar};display:flex;align-items:center;text-transform:uppercase;font-size:16px;">${emojiStr}${cleanedText}</h4>\n`;
   });
 
-  // Backup for explicit ### tags
-  html = html.replace(/### (.*?)(?:\n|$)/g, '<h4 style="margin-top:16px;margin-bottom:8px;font-weight:800;color:var(--accent);letter-spacing:0.04em;text-transform:uppercase;font-size:13px;">$1</h4>');
-  html = html.replace(/## (.*?)(?:\n|$)/g, '<h3 style="margin-top:20px;margin-bottom:10px;font-weight:800;color:var(--pos);letter-spacing:0.04em;text-transform:uppercase;font-size:14px;">$1</h3>');
+  html = html.replace(/### (.*?)(?:\n|$)/g, '<h4 style="margin-top:16px;margin-bottom:8px;font-weight:800;color:var(--accent);letter-spacing:0.04em;text-transform:uppercase;font-size:16px;">$1</h4>\n');
+  html = html.replace(/## (.*?)(?:\n|$)/g, '<h3 style="margin-top:20px;margin-bottom:10px;font-weight:800;color:var(--pos);letter-spacing:0.04em;text-transform:uppercase;font-size:16px;">$1</h3>\n');
 
-  // Highlight bold tags with our pos color
-  html = html.replace(/\*\*(.*?)\*\*/g, '<strong style="color:var(--pos);font-weight:700;">$1</strong>');
-  
-  // Lists
-  html = html.replace(/^\* (.*?)(?:\n|$)/gm, '<li style="margin-bottom:8px;line-height:1.55;color:#e2e2e9;">$1</li>');
-  html = html.replace(/^- (.*?)(?:\n|$)/gm, '<li style="margin-bottom:8px;line-height:1.55;color:#e2e2e9;">$1</li>');
-  html = html.replace(/((?:<li.*?>.*?<\/li>\n?)+)/gs, '<ul style="padding-left:0;margin:12px 0 20px 0;list-style:none;">$1</ul>');
-  
-  // Custom list items with cute bullet
-  html = html.replace(/<li style="(.*?)">(.*?)<\/li>/g, '<li style="$1;display:flex;align-items:flex-start;"><span style="color:var(--accent);margin-right:8px;font-size:14px;margin-top:2px;">✦</span><span style="flex:1;">$2</span></li>');
+  // Remove standalone separators
+  html = html.replace(/^\s*[-*—–_~]+\s*(?:\n|$)/gm, '');
 
-  // Replace remaining newlines
+  // Highlight bold tags
+  html = html.replace(/\*\*(.*?)\*\*/g, '<strong style="color:var(--text);font-weight:800;">$1</strong>');
+
+  // Lists - catch lists with or without leading spaces, including asterisks and dashes
+  html = html.replace(/^\s*(?:[-*—–]|(?:[0-9]+\.))\s+(.*?)(?:\n|$)/gm, '<li style="position:relative;margin-bottom:6px;line-height:1.5;font-size:14px;color:var(--text);list-style:none;padding-left:14px;"><span style="position:absolute;left:0;top:0;color:var(--accent);font-weight:bold;">•</span>$1</li>\n');
+  
+  // Wrap consecutive li tags in ul
+  html = html.replace(/((?:<li.*?>.*?<\/li>\n?)+)/gs, '<ul style="padding-left:16px;margin:12px 0 16px 0;list-style:none;">$1</ul>\n');
+
+  // Strip empty list items just in case
+  html = html.replace(/<li[^>]*>\s*<span[^>]*>\s*<\/span>\s*<\/li>\n?/g, '');
+
+  // Newlines to <br> for plain text paragraphs
   html = html.replace(/\n/g, '<br>');
+  
+  // Clean up <br> tags immediately following block level elements
+  html = html.replace(/(?:<\/(?:h3|h4|ul|li|div)>|<ul>)(?:<br>)+/g, (match) => match.replace(/<br>/g, ''));
+  html = html.replace(/<br>\s*<\/ul>/g, '</ul>'); // cleanup before closing ul
+  
   // Remove consecutive breaks
   html = html.replace(/(<br>\s*){2,}/g, '<br><br>');
   
@@ -1715,14 +1903,16 @@ window.setPalette = function (btn) {
 
 // ─── COUNT-UP ANIMATION ───
 function countUp(el) {
-  var raw = el.dataset.val;
-  if (!raw) return;
-  var suffix = (raw.match(/[^\d.,]+$/) || [''])[0];
+  if (!el) return;
+  var raw = el.dataset.val || el.textContent || '0';
+  if (!raw || raw === '--') return;
+
+  var suffix = (raw.match(/[^\d.,%]+$/) || [''])[0];
   var numStr = raw.replace(/[^\d.]/g, '');
   var target = parseFloat(numStr) || 0;
   var decimals = (numStr.split('.')[1] || '').length;
   var t0 = performance.now();
-  var dur = 950;
+  var dur = 800; // ~800ms duration
   var raf;
 
   function fmt(n) {
@@ -1731,18 +1921,23 @@ function countUp(el) {
       maximumFractionDigits: decimals
     }) + suffix;
   }
+
   function tick(now) {
     var k = Math.min(1, (now - t0) / dur);
-    var e = 1 - Math.pow(1 - k, 3);
+    var e = 1 - Math.pow(1 - k, 3); // Ease-out cubic curve
     el.textContent = fmt(target * e);
-    if (k < 1) raf = requestAnimationFrame(tick);
-    else el.textContent = raw;
+    if (k < 1) {
+      raf = requestAnimationFrame(tick);
+    } else {
+      el.textContent = raw;
+    }
   }
-  // If the raw value is already formatted (contains M/k), skip countUp and show as-is
-  if (/[Mk]$/.test(raw)) {
+
+  if (/[Mk]$/.test(raw) && !/^\d+\.?\d*$/.test(numStr)) {
     el.textContent = raw;
     return;
   }
+
   raf = requestAnimationFrame(tick);
   setTimeout(function () { cancelAnimationFrame(raf); el.textContent = raw; }, dur + 300);
 }
@@ -1950,7 +2145,224 @@ window.drawChart = function (id, pts, stroke, h, labels) {
     hoverTxt.textContent = val.toLocaleString();
   });
 
+  var max = Math.max.apply(null, pts);
+  var min = Math.min.apply(null, pts);
+  // Ensure we have a span
+  if (min === max) {
+    min = 0; max = max || 10;
+  }
+  var span = (max - min) || 1;
+  var n = pts.length;
+  if (n === 0) return;
+
+  var xs = function (i) { 
+    if (n === 1) return padLeft + (W - padLeft - padRight) / 2;
+    return padLeft + (i * (W - padLeft - padRight)) / (n - 1); 
+  };
+  var ys = function (v) { return H - padBottom - ((v - min) / span) * (H - padTop - padBottom); };
+  var P = pts.map(function (v, i) { return [xs(i), ys(v)]; });
+
+  var gid = 'g' + (Math.random() * 1e8 | 0).toString(36);
+  var graphElementsHtml = '';
+
+  if (n === 1) {
+    var p = P[0];
+    var barWidth = Math.min(60, W / 3);
+    var rx = p[0] - barWidth / 2;
+    var ry = p[1];
+    var rh = Math.max((H - padBottom) - ry, 2);
+    graphElementsHtml = 
+      '<rect x="' + rx + '" y="' + ry + '" width="' + barWidth + '" height="' + rh + '" fill="url(#' + gid + ')" rx="2"/>' +
+      '<line x1="' + rx + '" y1="' + ry + '" x2="' + (rx + barWidth) + '" y2="' + ry + '" stroke="' + stroke + '" stroke-width="3" stroke-linecap="round"/>';
+  } else {
+    var d = '';
+    P.forEach(function (p, i) {
+      if (i === 0) { d = 'M' + p[0] + ' ' + p[1]; return; }
+      var p0 = P[i - 1], p1 = p;
+      var pr = P[i - 2] || p0, nx = P[i + 1] || p1;
+      var cx1 = p0[0] + (p1[0] - pr[0]) / 6;
+      var cy1 = p0[1] + (p1[1] - pr[1]) / 6;
+      var cx2 = p1[0] - (nx[0] - p0[0]) / 6;
+      var cy2 = p1[1] - (nx[1] - p0[1]) / 6;
+      d += ' C' + cx1 + ' ' + cy1 + ',' + cx2 + ' ' + cy2 + ',' + p1[0] + ' ' + p1[1];
+    });
+
+    var area = d + ' L' + xs(n - 1) + ' ' + (H - padBottom) + ' L' + xs(0) + ' ' + (H - padBottom) + 'Z';
+    
+    var circles = P.map(function (p, i) {
+      var last = i === P.length - 1;
+      var label = labels && labels[i] ? labels[i] + '\n' : '';
+      var valStr = formatYAxis(pts[i]);
+      var rVal = last ? 4.5 : 4;
+      return '<circle cx="' + p[0] + '" cy="' + p[1] + '" r="' + rVal +
+        '" fill="' + (last ? stroke : 'var(--surf)') + '" stroke="' + stroke + '" stroke-width="2" style="cursor: pointer; transition: r 0.2s; padding:10px" onmouseover="this.setAttribute(\'r\', \'6\')" onmouseout="this.setAttribute(\'r\', \'' + rVal + '\')"><title>' + label + valStr + '</title></circle>';
+    }).join('');
+
+    graphElementsHtml = 
+      '<path d="' + area + '" fill="url(#' + gid + ')"/>' +
+      '<path d="' + d + '" fill="none" stroke="' + stroke + '" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>' +
+      circles;
+  }
+
+  function formatYAxis(v) {
+    if (v >= 1e6) return (v / 1e6).toFixed(1).replace(/\.0$/, '') + 'M';
+    if (v >= 1e3) return (v / 1e3).toFixed(1).replace(/\.0$/, '') + 'k';
+    return Math.round(v).toString();
+  }
+
+  // Draw Grid, Y-axis labels, and Axes
+  var gridLinesHtml = '';
+  var levels = [0, 0.25, 0.5, 0.75, 1.0];
+  levels.forEach(function (g) {
+    var val = min + span * g;
+    var y = ys(val);
+    var isBoundary = (g === 0 || g === 1);
+
+    gridLinesHtml += '<line x1="' + padLeft + '" x2="' + (W - padRight) + '" y1="' + y + '" y2="' + y +
+      '" stroke="var(--grid)" stroke-width="' + (isBoundary ? 0 : 1) + '"/>';
+
+    gridLinesHtml += '<line x1="' + (padLeft - 4) + '" x2="' + padLeft + '" y1="' + y + '" y2="' + y +
+      '" stroke="var(--border-s)" stroke-width="1"/>';
+
+    gridLinesHtml += '<text x="' + (padLeft - 8) + '" y="' + (y + 3) + '" text-anchor="end" font-size="9px" font-weight="500" fill="var(--muted)">' +
+      formatYAxis(val) + '</text>';
+  });
+
+  // Y-axis line
+  gridLinesHtml += '<line x1="' + padLeft + '" x2="' + padLeft + '" y1="' + padTop + '" y2="' + (H - padBottom) + '" stroke="var(--border-s)" stroke-width="1"/>';
+  // X-axis line
+  gridLinesHtml += '<line x1="' + padLeft + '" x2="' + (W - padRight) + '" y1="' + (H - padBottom) + '" y2="' + (H - padBottom) + '" stroke="var(--border-s)" stroke-width="1"/>';
+
+  // Y-Axis Title
+  var yLabelTxt = id === 'chart-growth' ? 'Followers' : id === 'chart-reels' ? 'Views' : 'Reach';
+  gridLinesHtml += '<text x="12" y="' + (H / 2) + '" text-anchor="middle" transform="rotate(-90 12,' + (H / 2) + ')" font-size="10px" font-weight="600" fill="var(--muted)" letter-spacing="1">' + yLabelTxt.toUpperCase() + '</text>';
+  
+  // X-Axis Title
+  gridLinesHtml += '<text x="' + (padLeft + (W - padLeft - padRight) / 2) + '" y="' + (H - 4) + '" text-anchor="middle" font-size="10px" font-weight="600" fill="var(--muted)" letter-spacing="1">DATE</text>';
+
+  var hoverSvg =
+    '<g class="hover-grp" style="display: none; pointer-events: none;">' +
+    '<line class="hover-ln" x1="0" x2="0" y1="' + padTop + '" y2="' + (H - padBottom) + '" stroke="var(--border-s)" stroke-width="1.2" stroke-dasharray="3,3"/>' +
+    '<circle class="hover-pt" cx="0" cy="0" r="5" fill="var(--surf)" stroke="var(--text)" stroke-width="2"/>' +
+    '<g class="hover-tooltip">' +
+    '<rect class="hover-bg" rx="6" ry="6" fill="var(--surf3)" stroke="var(--border-s)" stroke-width="1" width="80" height="42" x="-40" y="-48"/>' +
+    '<text class="hover-date" x="0" y="-30" text-anchor="middle" font-size="9px" fill="var(--muted)">Date</text>' +
+    '<text class="hover-txt" x="0" y="-16" text-anchor="middle" font-size="11px" font-weight="700" fill="var(--text)">0</text>' +
+    '</g>' +
+    '</g>';
+
+  el.innerHTML =
+    '<svg viewBox="0 0 ' + W + ' ' + H + '" preserveAspectRatio="none" style="width:100%;height:' + H + 'px;display:block">' +
+    '<defs><linearGradient id="' + gid + '" x1="0" y1="0" x2="0" y2="1">' +
+    '<stop offset="0%" stop-color="' + stroke + '" stop-opacity="0.26"/>' +
+    '<stop offset="100%" stop-color="' + stroke + '" stop-opacity="0"/>' +
+    '</linearGradient></defs>' +
+    gridLinesHtml +
+    graphElementsHtml +
+    hoverSvg +
+    '</svg>';
+
+  // Interactive Hover tracking logic
+  var svgEl = el.querySelector('svg');
+  var hoverGrp = el.querySelector('.hover-grp');
+  var hoverLn = el.querySelector('.hover-ln');
+  var hoverPt = el.querySelector('.hover-pt');
+  var hoverTooltip = el.querySelector('.hover-tooltip');
+  var hoverBg = el.querySelector('.hover-bg');
+  var hoverDate = el.querySelector('.hover-date');
+  var hoverTxt = el.querySelector('.hover-txt');
+
+  svgEl.addEventListener('mousemove', function (e) {
+    var rect = svgEl.getBoundingClientRect();
+    var mouseX = ((e.clientX - rect.left) / rect.width) * W;
+
+    // Find closest point index
+    var closestI = 0;
+    var minDistance = Infinity;
+    for (var i = 0; i < n; i++) {
+      var dist = Math.abs(xs(i) - mouseX);
+      if (dist < minDistance) {
+        minDistance = dist;
+        closestI = i;
+      }
+    }
+
+    var px = xs(closestI);
+    var py = ys(pts[closestI]);
+    var val = pts[closestI];
+    var dateLabel = (labels && labels[closestI]) ? labels[closestI] : '';
+
+    hoverGrp.style.display = 'block';
+
+    // Move vertical line and point
+    hoverLn.setAttribute('x1', px);
+    hoverLn.setAttribute('x2', px);
+    hoverPt.setAttribute('cx', px);
+    hoverPt.setAttribute('cy', py);
+
+    // Adjust tooltip placement to avoid clipping
+    var tooltipW = 80;
+    var tooltipH = dateLabel ? 42 : 28;
+    var tx = px;
+    var ty = py;
+
+    var localX = -tooltipW / 2;
+    var localY = -tooltipH - 6;
+
+    // Boundary enforcement
+    if (tx + localX < padLeft) {
+      localX = padLeft - tx + 4;
+    } else if (tx + localX + tooltipW > W - padRight) {
+      localX = (W - padRight) - tx - tooltipW - 4;
+    }
+
+    if (ty + localY < 4) {
+      localY = 12; // Flip to bottom of point
+    }
+
+    hoverTooltip.setAttribute('transform', 'translate(' + tx + ',' + ty + ')');
+    hoverBg.setAttribute('x', localX);
+    hoverBg.setAttribute('y', localY);
+    hoverBg.setAttribute('height', tooltipH);
+
+    if (dateLabel) {
+      hoverDate.style.display = 'block';
+      hoverDate.textContent = dateLabel;
+      hoverDate.setAttribute('x', localX + tooltipW / 2);
+      hoverDate.setAttribute('y', localY + 12);
+
+      hoverTxt.setAttribute('x', localX + tooltipW / 2);
+      hoverTxt.setAttribute('y', localY + 28);
+    } else {
+      hoverDate.style.display = 'none';
+      hoverTxt.setAttribute('x', localX + tooltipW / 2);
+      hoverTxt.setAttribute('y', localY + 18);
+    }
+
+    hoverTxt.textContent = val.toLocaleString();
+  });
+
   svgEl.addEventListener('mouseleave', function () {
     hoverGrp.style.display = 'none';
+  });
+}
+
+// ─── PDF DOWNLOAD BUTTON HANDLER ───
+const downloadPdfBtn = document.getElementById('download-pdf-btn');
+if (downloadPdfBtn) {
+  downloadPdfBtn.addEventListener('click', () => {
+    const handleElem = document.getElementById('profile-handle');
+    let handle = handleElem ? handleElem.textContent.replace('@', '').trim() : '';
+    if (handle && handle !== 'username') {
+      try {
+        if (window.currentAuditData) {
+          localStorage.setItem('audit_data_' + handle.toLowerCase(), JSON.stringify(window.currentAuditData));
+          sessionStorage.setItem('last_audit_data', JSON.stringify(window.currentAuditData));
+        }
+      } catch(e){}
+      window.open('pdf-template.html?handle=' + encodeURIComponent(handle) + '&t=' + Date.now(), '_blank');
+    } else {
+      alert('Please run an audit first.');
+    }
   });
 }

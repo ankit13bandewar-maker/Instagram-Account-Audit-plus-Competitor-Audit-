@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Gauge Test</title>
+  <style>
+    body { background: #ffffff; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; font-family: system-ui, sans-serif; }
+    .container { background: #ffffff; padding: 40px; border-radius: 16px; box-shadow: 0 10px 25px rgba(0,0,0,0.08); }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <svg width="340" height="180" viewBox="0 0 310 165" style="overflow: visible;">
+      <defs>
+        <!-- Text paths along arc centerlines (Radius 120, Center 152, 138) -->
+        <path id="arc-slow-path" d="M 25 140 A 120 120 0 0 1 76 59" />
+        <path id="arc-average-path" d="M 87 50 A 120 120 0 0 1 146 36" />
+        <path id="arc-active-path" d="M 158 36 A 120 120 0 0 1 217 50" />
+        <path id="arc-buzzing-path" d="M 228 59 A 120 120 0 0 1 279 140" />
+      </defs>
+
+      <!-- Colored Arc Segments -->
+      <!-- Arc 1: Red SLOW -->
+      <path d="M 25 140 A 120 120 0 0 1 76 59" fill="none" stroke="#ef4444" stroke-width="24" stroke-linecap="round"/>
+      <!-- Arc 2: Yellow AVERAGE -->
+      <path d="M 87 50 A 120 120 0 0 1 146 36" fill="none" stroke="#f59e0b" stroke-width="24"/>
+      <!-- Arc 3: Green ACTIVE -->
+      <path d="M 158 36 A 120 120 0 0 1 217 50" fill="none" stroke="#10b981" stroke-width="24"/>
+      <!-- Arc 4: Blue BUZZING -->
+      <path d="M 228 59 A 120 120 0 0 1 279 140" fill="none" stroke="#0284c7" stroke-width="24" stroke-linecap="round"/>
+
+      <!-- Circular Curved Labels Inside Arcs -->
+      <!-- SLOW -->
+      <text font-size="8.5" font-weight="900" fill="#ffffff" font-family="system-ui, sans-serif" letter-spacing="0.5px" dominant-baseline="central">
+        <textPath href="#arc-slow-path" xlink:href="#arc-slow-path" startOffset="50%" text-anchor="middle">SLOW</textPath>
+      </text>
+
+      <!-- AVERAGE -->
+      <text font-size="8.5" font-weight="900" fill="#ffffff" font-family="system-ui, sans-serif" letter-spacing="0.5px" dominant-baseline="central">
+        <textPath href="#arc-average-path" xlink:href="#arc-average-path" startOffset="50%" text-anchor="middle">AVERAGE</textPath>
+      </text>
+
+      <!-- ACTIVE -->
+      <text font-size="8.5" font-weight="900" fill="#ffffff" font-family="system-ui, sans-serif" letter-spacing="0.5px" dominant-baseline="central">
+        <textPath href="#arc-active-path" xlink:href="#arc-active-path" startOffset="50%" text-anchor="middle">ACTIVE</textPath>
+      </text>
+
+      <!-- BUZZING -->
+      <text font-size="8.5" font-weight="900" fill="#ffffff" font-family="system-ui, sans-serif" letter-spacing="0.5px" dominant-baseline="central">
+        <textPath href="#arc-buzzing-path" xlink:href="#arc-buzzing-path" startOffset="50%" text-anchor="middle">BUZZING</textPath>
+      </text>
+
+      <!-- Emojis Inside Arc Radius -->
+      <text x="44" y="118" font-size="15">😢</text>
+      <text x="96" y="98" font-size="15">😐</text>
+      <text x="186" y="98" font-size="15">😊</text>
+      <text x="238" y="118" font-size="15">🤩</text>
+
+      <!-- Dynamic Speedometer Needle Pointer -->
+      <g transform="translate(152, 138) rotate(-65)">
+        <path d="M -5 0 L 0 -105 L 5 0 Z" fill="#1e293b"/>
+        <circle cx="0" cy="0" r="12" fill="#0f172a"/>
+        <circle cx="0" cy="0" r="5" fill="#ffffff"/>
+      </g>
+    </svg>
+  </div>
+</body>
+</html>

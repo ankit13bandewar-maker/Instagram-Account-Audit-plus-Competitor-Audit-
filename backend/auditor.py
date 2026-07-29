@@ -23,8 +23,8 @@
 #         posts_summary.append({
 #             "date": post.get("timestamp", "N/A"),
 #             "caption": post.get("caption", "No caption provided"),
-#             "likes": post.get("likesCount", 0),
-#             "comments": post.get("commentsCount", 0),
+#             "likes": max(0, post.get("likesCount", 0)),
+#             "comments": max(0, post.get("commentsCount", 0)),
 #             "type": post.get("type", "unknown")
 #         })
 
@@ -395,21 +395,21 @@ We performed a deep-dive diagnostic check on the underperforming assets that dro
 
 def generate_local_hashtag_audit_fallback(hashtag_data, overall_median_likes):
     if not hashtag_data:
-        return f"""### 🏷️ AI HASHTAG STRATEGY ASSESSMENT
+        return f"""### AI HASHTAG STRATEGY ASSESSMENT
 * **No Telemetry:** Add hashtags to captions.
 
-### 📈 GROWTH RECOMMENDATIONS
+### GROWTH RECOMMENDATIONS
 * **Volume:** Keep tags under 5.
 * **Niche:** Use tags matching theme."""
         
     top_tag = hashtag_data[0]["tag"]
     top_engagement = hashtag_data[0]["avg_likes"]
     
-    return f"""### 🏷️ AI HASHTAG STRATEGY ASSESSMENT
+    return f"""### AI HASHTAG STRATEGY ASSESSMENT
 * **Top Tag:** {top_tag} ({top_engagement:,} likes).
 * **Friction:** Broad hashtags drag reach. Use niche tags.
 
-### 📈 GROWTH RECOMMENDATIONS
+### GROWTH RECOMMENDATIONS
 * **Double Down:** {top_tag}.
 * **Volume:** Keep under 5 tags.
 * **Niche:** Use focused variations."""
@@ -682,11 +682,11 @@ def run_hashtag_audit(hashtag_data, overall_median_likes):
 
     Generate an audit card containing these exact two sections. Keep it highly action-oriented and brief:
     
-    ### 🏷️ AI HASHTAG STRATEGY ASSESSMENT
+    ### AI HASHTAG STRATEGY ASSESSMENT
     * **Top Performer:** [Hashtag name] is the primary driver (averaging [number] likes).
     * **Key Issue:** [1 extremely short bullet point identifying the single core issue, e.g. generic tags cluttering categorization or niche tags underutilized. Maximum 15 words.]
     
-    ### 📈 GROWTH RECOMMENDATIONS
+    ### GROWTH RECOMMENDATIONS
     * **Double Down:** [Hashtag name] (exceeds your {overall_median_likes} median baseline).
     * **Optimal Volume:** Keep total hashtags below [5-8] per post to prevent classification bloat.
     * **Niche Targets:** Use highly focused niche tags (e.g. #galaxy, #astrophotography) rather than generic anchors.

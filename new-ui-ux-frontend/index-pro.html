@@ -5,7 +5,8 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Instagram Audit — BloomX</title>
-  <link rel="stylesheet" href="style.css?v=20260724-fix7" />
+  <link rel="stylesheet" href="style.css?v=20260724-linear1" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <script src="https://unpkg.com/lucide@latest"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
@@ -13,10 +14,7 @@
 
 <body>
 
-  <!-- Print Header for PDF Generation -->
-  <div class="print-header">
-    <img src="Bloomxlogo.png" alt="BloomX Logo" style="height: 60px; object-fit: contain; margin: 0 auto; display: block;" />
-  </div>
+
 
   <div class="app">
     <div id="drawer-backdrop" class="drawer-backdrop"></div>
@@ -181,29 +179,7 @@
         <!-- Main Diagnostics Dashboard -->
         <div class="wrap hidden" id="dashboard-state">
           <table class="pdf-print-table">
-            <thead class="print-running-header">
-              <tr>
-                <td>
-                  <div class="print-running-header-inner" style="display: flex; align-items: center; justify-content: space-between; padding-bottom: 8px; border-bottom: 1px solid #CBD5E1; background: #FFFFFF;">
-                    <div style="display: flex; align-items: center; gap: 8px;">
-                      <img src="Bloomxlogo.png" alt="BloomX Logo" style="height: 18px; width: auto; object-fit: contain;" />
-                      <span style="font-weight: 700; color: #111827; letter-spacing: 0.5px;">BloomX Diagnostic Report</span>
-                    </div>
-                    <div style="font-size: 11px; color: #4F46E5; font-weight: 700;" id="print-running-handle">@username</div>
-                  </div>
-                </td>
-              </tr>
-            </thead>
-            <tfoot class="print-running-footer">
-              <tr>
-                <td>
-                  <div class="print-running-footer-inner" style="display: flex; align-items: center; justify-content: space-between; padding-top: 8px; border-top: 1px solid #CBD5E1; font-size: 9px; color: #64748B; background: #FFFFFF;">
-                    <span>BloomX Business Solutions · Proprietary & Confidential</span>
-                    <span>Instagram Diagnostic Audit</span>
-                  </div>
-                </td>
-              </tr>
-            </tfoot>
+
             <tbody class="pdf-print-body">
               <tr>
                 <td>
@@ -495,17 +471,17 @@
                     <span class="band-marker-dot"></span>
                   </div>
                   <div class="bands-bar">
-                    <div class="band-seg" style="background:var(--neg)"></div>
-                    <div class="band-seg" style="background:var(--warn)"></div>
-                    <div class="band-seg" style="background:var(--accent)"></div>
-                    <div class="band-seg" style="background:var(--pos)"></div>
+                    <div class="band-seg" style="background:#EF4444"></div>
+                    <div class="band-seg" style="background:#F59E0B"></div>
+                    <div class="band-seg" style="background:#0284C7"></div>
+                    <div class="band-seg" style="background:#10B981"></div>
                   </div>
                 </div>
-                <div class="bands-labels">
-                  <span class="band-lbl">Low</span>
-                  <span class="band-lbl">Average</span>
-                  <span class="band-lbl active">High</span>
-                  <span class="band-lbl">Exceptional</span>
+                <div class="bands-labels" style="display:flex; justify-content:space-between; text-align:center; font-size:11px; font-weight:700; color:#475569; margin-top:8px; text-transform:uppercase; letter-spacing:0.5px;">
+                  <span style="flex:1;">Low</span>
+                  <span style="flex:1;">Average</span>
+                  <span style="flex:1;">High</span>
+                  <span style="flex:1;">Exceptional</span>
                 </div>
               </div>
 

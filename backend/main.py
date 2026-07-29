@@ -1105,156 +1105,24 @@ def run_live_apify_competitor_audit(job_id: str, profile_url: str, date_from: st
         print(f"Background task error: {e}")
         audit_jobs[job_id] = {"status": "error", "error": str(e)}
 
-@app.get("/api/dashboard-audit")
-def get_dashboard_intelligence(
-    background_tasks: BackgroundTasks,
-    profile_url: str = Query("https://www.instagram.com/nasa", description="Instagram profile URL to audit"),
-    date_from: str = Query(None, description="Start date for the audit (YYYY-MM-DD)"),
-    date_to: str = Query(None, description="End date for the audit (YYYY-MM-DD)")
-):
-    job_id = str(uuid.uuid4())
-    audit_jobs[job_id] = {"status": "processing"}
-    background_tasks.add_task(run_live_apify_competitor_audit, job_id, profile_url, date_from, date_to)
-    return {"job_id": job_id, "status": "processing"}
-
-@app.get("/api/audit-status/{job_id}")
-def get_audit_status(job_id: str):
-    job = audit_jobs.get(job_id)
-    if not job:
-        raise HTTPException(status_code=404, detail="Job not found")
-        
-    if job.get("status") == "completed" and "data" in job:
-        payload = job["data"]
-        audit_year = datetime.utcnow().year
-        audited_at = payload.get("audited_at")
-        if audited_at:
-            try:
-                audit_year = int(audited_at[:4])
-            except Exception:
-                pass
-                
-        if "reels_views_distribution" in payload:
-            payload["reels_views_distribution"] = fill_distribution_gaps(payload["reels_views_distribution"], audit_year)
-        if "reach_distribution_data" in payload:
-            payload["reach_distribution_data"] = fill_distribution_gaps(payload["reach_distribution_data"], audit_year)
-            
-        client_metrics = payload.get("client_metrics")
-        if isinstance(client_metrics, dict):
-            if "reels_views_distribution" in client_metrics:
-                client_metrics["reels_views_distribution"] = fill_distribution_gaps(client_metrics["reels_views_distribution"], audit_year)
-            if "reach_distribution_data" in client_metrics:
-                client_metrics["reach_distribution_data"] = fill_distribution_gaps(client_metrics["reach_distribution_data"], audit_year)
-                
-    return job
-
-@app.get("/api/debug-apify")
-def debug_apify():
-    """Diagnostic: checks if Apify token is loaded and can connect."""
-    import os
-    token = os.getenv("APIFY_API_TOKEN", "")
-    if not token:
-        return {"status": "ERROR", "reason": "APIFY_API_TOKEN is not set in environment"}
-    masked = token[:6] + "..." + token[-4:]
-    try:
-        from apify_client import ApifyClient
-        client = ApifyClient(token)
-        user = client.user().get()
-        return {"status": "OK", "token_prefix": masked, "apify_user": user.get("username", "unknown")}
-    except Exception as e:
-        return {"status": "ERROR", "token_prefix": masked, "reason": str(e)}
-
-@app.get("/api/test-scrape/{username}")
-def test_scrape(username: str):
-    """Diagnostic: runs a live scrape for a username and shows exactly what data source was used."""
-    import os
-    from apify_service import _scrape_via_apify, _scrape_via_instagram_api, _extract_username
-    profile_url = f"https://www.instagram.com/{username}"
-    result = {"username": username, "ig_api": None, "apify": None, "error": None}
-
-    # Test IG API
-    try:
-        ig_posts = _scrape_via_instagram_api(profile_url)
-        result["ig_api"] = {"count": len(ig_posts), "first_url": ig_posts[0].get("url","") if ig_posts else None}
-    except Exception as e:
-        result["ig_api"] = {"error": str(e)}
-
-    # Test Apify directly
-    try:
-        apify_posts = _scrape_via_apify(profile_url, None)
-        first = apify_posts[0] if apify_posts else {}
-        result["apify"] = {
-            "count": len(apify_posts),
-            "first_url": first.get("url",""),
-            "first_shortcode": first.get("shortcode",""),
-            "ownerFollowerCount": first.get("ownerFollowerCount", 0)
-        }
-    except Exception as e:
-        result["apify"] = {"error": str(e)}
-
-    return result
-
-@app.post("/api/clear-cache")
-def clear_cache():
-    """Wipe the CSV post cache and history DB. Useful to force fresh Apify scrapes on the live server."""
-    import glob
-    deleted = []
-    # Clear CSV cache
-    if os.path.exists(CSV_PATH := os.path.join(base_dir, "data_cache", "instagram_posts_dataset.csv")):
-        os.remove(CSV_PATH)
-        deleted.append("instagram_posts_dataset.csv")
-    # Clear history DB
-    if os.path.exists(HISTORY_DB_PATH):
-        with open(HISTORY_DB_PATH, "w") as f:
-            json.dump({}, f)
-        deleted.append("history_db.json (reset to empty)")
-    return {"cleared": deleted, "message": "Cache cleared. Next audit will fetch fresh data from Apify."}
-
-@app.get("/api/history-list")
-
-def get_history_list():
-    try:
-        with open(HISTORY_DB_PATH, "r", encoding="utf-8") as f:
-            history_db = json.load(f)
-    except:
-        return []
-        
-    summary_list = []
-    for username, payload in history_db.items():
-        client_metrics = payload.get("client_metrics", {})
-        calc = client_metrics.get("calculated_metrics", {})
-        summary_list.append({
-            "username": username,
-            "audited_at": payload.get("audited_at"),
-            "total_followers": client_metrics.get("follower_count", 0),
-            "engagement_rate": calc.get("engagement_rate", 0)
-        })
-        
-    return sorted(summary_list, key=lambda x: x["audited_at"] or "", reverse=True)
-
-def fill_distribution_gaps(items, audit_year=2026):
-    if not items:
+def fill_distribution_gaps(items: list, audit_year: int = None) -> list:
+    if not items or not isinstance(items, list):
         return items
-    
+    if audit_year is None:
+        audit_year = datetime.utcnow().year
+        
     parsed_dict = {}
     for item in items:
-        date_str = item.get("date", "")
-        views = item.get("views", 0)
-        if views <= 0:
+        if not isinstance(item, dict):
             continue
+        clean_date_str = item.get("date", "")
+        views = item.get("views", 0)
         try:
-            clean_date_str = date_str.strip().replace("Wk of ", "")
-            try:
-                dt = datetime.strptime(clean_date_str, "%d/%m/%Y").date()
-            except ValueError:
-                dt = datetime.strptime(f"{clean_date_str} {audit_year}", "%b %d %Y").date()
+            dt = datetime.strptime(f"{clean_date_str} {audit_year}", "%b %y %Y").date()
             parsed_dict[dt] = views
         except Exception:
-            try:
-                dt = datetime.strptime(f"{clean_date_str} {audit_year}", "%b %y %Y").date()
-                parsed_dict[dt] = views
-            except Exception:
-                continue
-                
+            continue
+            
     if not parsed_dict:
         return items
         
@@ -1264,6 +1132,31 @@ def fill_distribution_gaps(items, audit_year=2026):
         
     return filled
 
+@app.get("/api/history-list")
+def get_history_list():
+    try:
+        with open(HISTORY_DB_PATH, "r", encoding="utf-8") as f:
+            history_db = json.load(f)
+    except:
+        return []
+        
+    if not isinstance(history_db, dict):
+        return []
+        
+    summary_list = []
+    for username, payload in history_db.items():
+        if not isinstance(payload, dict):
+            continue
+        client_metrics = payload.get("client_metrics", {}) or {}
+        calc = client_metrics.get("calculated_metrics", {}) or {}
+        summary_list.append({
+            "username": username,
+            "audited_at": payload.get("audited_at"),
+            "total_followers": calc.get("total_followers") or client_metrics.get("follower_count", 0),
+            "engagement_rate": calc.get("engagement_rate", 0)
+        })
+    return summary_list
+
 @app.get("/api/history/{username}/data")
 def get_history_snapshot(username: str):
     try:
@@ -1272,11 +1165,22 @@ def get_history_snapshot(username: str):
     except:
         raise HTTPException(status_code=500, detail="History database unavailable")
         
-    username_lower = username.lower()
-    if username_lower not in history_db:
-        raise HTTPException(status_code=404, detail="Username not found in history")
+    username_clean = username.lower().replace('@', '').strip()
+    payload = None
+    if username_clean in history_db:
+        payload = history_db[username_clean]
+    else:
+        for k, v in history_db.items():
+            if k.lower().replace('@', '').strip() == username_clean:
+                payload = v
+                break
+        if not payload and history_db:
+            payload = list(history_db.values())[-1]
+            
+    if not payload:
+        raise HTTPException(status_code=404, detail="No audit history available")
         
-    payload = history_db[username_lower]
+    payload = json.loads(json.dumps(payload))  # copy payload object
     
     # Get audit year from audited_at if available
     audit_year = datetime.utcnow().year
@@ -1287,7 +1191,7 @@ def get_history_snapshot(username: str):
         except Exception:
             pass
             
-    # Dynamically fill gaps in distributions for charts to make them look like continuous real daily charts
+    # Dynamically fill gaps in distributions for charts
     if "reels_views_distribution" in payload:
         payload["reels_views_distribution"] = fill_distribution_gaps(payload["reels_views_distribution"], audit_year)
     if "reach_distribution_data" in payload:
@@ -1301,6 +1205,23 @@ def get_history_snapshot(username: str):
             client_metrics["reach_distribution_data"] = fill_distribution_gaps(client_metrics["reach_distribution_data"], audit_year)
             
     return payload
+
+@app.get("/api/dashboard-audit")
+def get_dashboard_intelligence(
+    background_tasks: BackgroundTasks,
+    profile_url: str = Query("https://www.instagram.com/nasa", description="Instagram profile URL to audit")
+):
+    job_id = str(uuid.uuid4())
+    audit_jobs[job_id] = {"status": "processing"}
+    background_tasks.add_task(run_live_apify_competitor_audit, job_id, profile_url)
+    return {"job_id": job_id, "status": "processing"}
+
+@app.get("/api/audit-status/{job_id}")
+def get_audit_status(job_id: str):
+    job = audit_jobs.get(job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+    return job
 
 @app.get("/api/hashtag-intelligence")
 def get_hashtag_intelligence(
